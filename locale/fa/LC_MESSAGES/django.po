@@ -1,0 +1,97 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fa\n"
+
+msgid "Brand"
+msgstr "برند"
+
+msgid "Brands"
+msgstr "برندها"
+
+msgid "Brand Name"
+msgstr "نام برند"
+
+msgid "Phone Model"
+msgstr "مدل گوشی"
+
+msgid "Phone Models"
+msgstr "مدل‌های گوشی"
+
+msgid "Model Name"
+msgstr "نام مدل"
+
+msgid "Technical / Board Code"
+msgstr "کد فنی / مدل برد"
+
+msgid "Schematic Category"
+msgstr "دسته‌بندی شماتیک"
+
+msgid "Schematic Categories"
+msgstr "دسته‌بندی‌های شماتیک"
+
+msgid "Category Title"
+msgstr "عنوان دسته‌بندی"
+
+msgid "Category"
+msgstr "دسته‌بندی"
+
+msgid "Schematic"
+msgstr "شماتیک"
+
+msgid "Schematics"
+msgstr "شماتیک‌ها"
+
+msgid "Schematic Title"
+msgstr "عنوان شماتیک"
+
+msgid "Technical Notes & Solutions"
+msgstr "توضیحات و نکات تجربی تعمیر"
+
+msgid "Is Free"
+msgstr "رایگان است"
+
+msgid "Single Purchase Price (Tomans)"
+msgstr "قیمت فروش تکی (تومان)"
+
+msgid "Requires Subscription"
+msgstr "نیازمند اشتراک"
+
+msgid "View Count"
+msgstr "تعداد بازدید"
+
+msgid "Schematic File"
+msgstr "فایل شماتیک"
+
+msgid "Schematic Files"
+msgstr "فایل‌های شماتیک"
+
+msgid "File Title"
+msgstr "عنوان فایل"
+
+msgid "File Size (Bytes)"
+msgstr "حجم فایل (بایت)"
+
+msgid "Upload Date"
+msgstr "تاریخ آپلود"
+
+msgid "Schematics Management"
+msgstr "مدیریت شماتیک‌ها و نقشه‌ها"
+
+msgid "Accounts & Users"
+msgstr "مدیریت کاربران و دسترسی‌ها"
+
+msgid "Phone Number"
+msgstr "شماره موبایل"
+
+msgid "Repair Shop Name"
+msgstr "نام تعمیرگاه"
+
+msgid "Technician"
+msgstr "تکنسین"
+
+msgid "Role"
+msgstr "نقش کاربری"
+
+msgid "Staff Status"
+msgstr "دسترسی مدیریت / پرسنل"

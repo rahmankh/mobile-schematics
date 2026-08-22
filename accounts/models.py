@@ -1,19 +1,13 @@
-from django.db import models
-
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 class CustomUserManager(BaseUserManager):
-    """
-    Manager for custom user model where phone_number is the unique identifier
-    for authentication instead of usernames.
-    """
     def create_user(self, phone_number: str, password: str = None, **extra_fields):
         if not phone_number:
             raise ValueError("The Phone Number must be set")
-        
         user = self.model(phone_number=phone_number, **extra_fields)
         if password:
             user.set_password(password)
@@ -26,45 +20,37 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
-
-        if extra_fields.get('is_staff') is not True:
-            raise ValueError('Superuser must have is_staff=True.')
-        if extra_fields.get('is_superuser') is not True:
-            raise ValueError('Superuser must have is_superuser=True.')
-
         return self.create_user(phone_number, password, **extra_fields)
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
-    """
-    Custom User model for mobile repair technicians and administrators.
-    """
     class RoleChoices(models.TextChoices):
-        TECHNICIAN = 'technician', 'Technician'
-        ADMIN = 'admin', 'Admin'
+        TECHNICIAN = 'technician', _('Technician')
+        ADMIN = 'admin', _('Admin')
 
     phone_number = models.CharField(
+        _('Phone Number'),
         max_length=15,
         unique=True,
-        db_index=True,
-        help_text="Unique phone number used for login and notifications."
+        db_index=True
     )
-    first_name = models.CharField(max_length=150, blank=True)
-    last_name = models.CharField(max_length=150, blank=True)
+    first_name = models.CharField(_('First Name'), max_length=150, blank=True)
+    last_name = models.CharField(_('Last Name'), max_length=150, blank=True)
     repair_shop_name = models.CharField(
+        _('Repair Shop Name'),
         max_length=200, 
-        blank=True, 
-        help_text="Name of the mobile repair shop or center."
+        blank=True
     )
     role = models.CharField(
+        _('Role'),
         max_length=20, 
         choices=RoleChoices.choices, 
         default=RoleChoices.TECHNICIAN
     )
     
-    is_active = models.BooleanField(default=True)
-    is_staff = models.BooleanField(default=False)
-    date_joined = models.DateTimeField(default=timezone.now)
+    is_active = models.BooleanField(_('Active'), default=True)
+    is_staff = models.BooleanField(_('Staff Status'), default=False)
+    date_joined = models.DateTimeField(_('Date Joined'), default=timezone.now)
 
     objects = CustomUserManager()
 
@@ -72,8 +58,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = []
 
     class Meta:
-        verbose_name = 'User'
-        verbose_name_plural = 'Users'
+        verbose_name = _('User')
+        verbose_name_plural = _('Users')
 
     def __str__(self) -> str:
         return f"{self.phone_number} ({self.get_full_name() or 'No Name'})"
