@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-a-=vg0#-eprh#5-%j^*=wjkq!4c_q^u@r8x-i+on$a=ks=19jq
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -173,3 +173,8 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ),
 }
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.app.github.dev',
+    'https://*.githubpreview.dev',
+]
