@@ -1,15 +1,20 @@
 from django.db.models import F
 from django.utils.translation import gettext_lazy as _
 from rest_framework import generics, filters
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 
-from .models import Brand, PhoneModel, SchematicCategory, Schematic
+# ایمپورت پرمیشن اختصاصی اشتراک
+from subscriptions.permissions import HasActiveSubscription
+
+# اضافه شدن SchematicFile به ایمپورت مدل‌ها
+from .models import Brand, PhoneModel, SchematicCategory, Schematic, SchematicFile
 from .serializers import (
     BrandSerializer,
     PhoneModelSerializer,
     SchematicCategorySerializer,
     SchematicListSerializer,
     SchematicDetailSerializer,
+    SchematicFileSerializer,  # مطمئن شوید این سریالایزر در serializers.py تعریف شده باشد
 )
 
 
@@ -105,3 +110,16 @@ class SchematicDetailView(generics.RetrieveAPIView):
         Schematic.objects.filter(pk=obj.pk).update(view_count=F('view_count') + 1)
         obj.refresh_from_db()
         return obj
+
+
+# =========================================================================
+# بخش جدید: کنترل دسترسی دانلود فایل‌های شماتیک بر اساس اشتراک فعال
+# =========================================================================
+class SchematicFileDownloadView(generics.RetrieveAPIView):
+    """
+    مشاهده و دانلود فایل شماتیک.
+    فقط کاربران دارای اشتراک فعال (یا ادمین‌ها) مجاز به دریافت فایل هستند.
+    """
+    queryset = SchematicFile.objects.select_related('schematic').all()
+    serializer_class = SchematicFileSerializer
+    permission_classes = [IsAuthenticated, HasActiveSubscription]

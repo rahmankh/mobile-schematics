@@ -5,6 +5,7 @@ from .views import (
     SchematicCategoryListView,
     SchematicListView,
     SchematicDetailView,
+    SchematicFileDownloadView
 )
 
 app_name = 'schematics'
@@ -15,4 +16,5 @@ urlpatterns = [
     path('categories/', SchematicCategoryListView.as_view(), name='category-list'),
     path('list/', SchematicListView.as_view(), name='schematic-list'),
     path('detail/<int:pk>/', SchematicDetailView.as_view(), name='schematic-detail'),
+    path('files/<int:pk>/download/', SchematicFileDownloadView.as_view(), name='schematic-file-download'),
 ]

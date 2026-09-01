@@ -93,3 +93,9 @@ class SchematicDetailSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
+
+
+class SchematicFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SchematicFile
+        fields = ('id', 'schematic', 'file_type', 'file', 'file_size', 'created_at')
