@@ -95,7 +95,10 @@ class SchematicDetailSerializer(serializers.ModelSerializer):
         ]
 
 
+# schematics/serializers.py
+
 class SchematicFileSerializer(serializers.ModelSerializer):
     class Meta:
         model = SchematicFile
-        fields = ('id', 'schematic', 'file_type', 'file', 'file_size', 'created_at')
+        fields = ('id', 'schematic', 'file')
+        read_only_fields = ('id',)

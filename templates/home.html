@@ -1,0 +1,171 @@
+<!-- templates/home.html -->
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پلتفرم تخصصی شماتیک و نقشه‌های موبایل</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, Tahoma, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 30px 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: #38bdf8;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        p.subtitle {
+            color: #94a3b8;
+            font-size: 15px;
+        }
+        .section-title {
+            color: #e2e8f0;
+            border-bottom: 2px solid #334155;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            margin-bottom: 16px;
+            font-size: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 20px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.2s ease-in-out;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: #38bdf8;
+            background-color: #243248;
+            box-shadow: 0 8px 20px rgba(56, 189, 248, 0.15);
+        }
+        .card h3 {
+            margin: 0 0 8px 0;
+            color: #f1f5f9;
+            font-size: 18px;
+        }
+        .card p {
+            margin: 0;
+            color: #94a3b8;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .card .tag {
+            align-self: flex-start;
+            margin-top: 14px;
+            background: #0369a1;
+            color: #e0f2fe;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            direction: ltr;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>پلتفرم نقشه‌ها و شماتیک‌های برد موبایل</h1>
+            <p class="subtitle">داشبورد ناوبری و دسترسی سریع به صفحات و بخش‌های فعال سیستم</p>
+        </header>
+
+        <!-- بخش شماتیک‌ها -->
+        <div class="section-title">📱 بخش نقشه‌ها و مدل‌ها (Schematics)</div>
+        <div class="grid">
+            <a href="/api/v1/schematics/brands/" class="card">
+                <div>
+                    <h3>برندهای موبایل</h3>
+                    <p>مشاهده تمام برندها (سامسونگ، شیائومی، اپل و...) همراه با شمارش مدل‌ها</p>
+                </div>
+                <span class="tag">/api/v1/schematics/brands/</span>
+            </a>
+
+            <a href="/api/v1/schematics/models/" class="card">
+                <div>
+                    <h3>مدل‌های گوشی</h3>
+                    <p>لیست کامل مدل‌ها با قابلیت فیلتر بر اساس برند و کد فنی برد</p>
+                </div>
+                <span class="tag">/api/v1/schematics/models/</span>
+            </a>
+
+            <a href="/api/v1/schematics/categories/" class="card">
+                <div>
+                    <h3>دسته‌بندی‌ها</h3>
+                    <p>دسته‌های نقشه کامل، سلوشن‌های تعمیراتی، تست‌پوینت و مسیرها</p>
+                </div>
+                <span class="tag">/api/v1/schematics/categories/</span>
+            </a>
+
+            <a href="/api/v1/schematics/" class="card">
+                <div>
+                    <h3>لیست تمام شماتیک‌ها</h3>
+                    <p>جستجو و کاوش در تمامی فایل‌ها و نقشه‌های بارگذاری شده</p>
+                </div>
+                <span class="tag">/api/v1/schematics/</span>
+            </a>
+        </div>
+
+        <!-- بخش اشتراک‌ها -->
+        <div class="section-title">💳 بخش پلن‌ها و اشتراک‌ها (Subscriptions)</div>
+        <div class="grid">
+            <a href="/api/v1/subscriptions/plans/" class="card">
+                <div>
+                    <h3>پلن‌های اشتراک</h3>
+                    <p>مشاهده پلن‌های فعال زمانی و هزینه‌های دسترسی تکنسین‌ها</p>
+                </div>
+                <span class="tag">/api/v1/subscriptions/plans/</span>
+            </a>
+
+            <a href="/api/v1/subscriptions/my-subscription/" class="card">
+                <div>
+                    <h3>اشتراک من</h3>
+                    <p>بررسی وضعیت انقضا و فعال بودن اشتراک کاربر لاگین شده</p>
+                </div>
+                <span class="tag">/api/v1/subscriptions/my-subscription/</span>
+            </a>
+        </div>
+
+        <!-- بخش حساب کاربری و مدیریت -->
+        <div class="section-title">⚙️ حساب کاربری و مدیریت</div>
+        <div class="grid">
+            <a href="/admin/" class="card">
+                <div>
+                    <h3>پنل ادمین جنگو</h3>
+                    <p>ورود به پنل مدیریت دیتابیس، آپلود نقشه‌ها و تعریف دسترسی‌ها</p>
+                </div>
+                <span class="tag">/admin/</span>
+            </a>
+
+            <a href="/api/v1/accounts/profile/" class="card">
+                <div>
+                    <h3>پروفایل تکنسین</h3>
+                    <p>مشاهده و ویرایش مشخصات فردی و اطلاعات تعمیرگاه</p>
+                </div>
+                <span class="tag">/api/v1/accounts/profile/</span>
+            </a>
+        </div>
+    </div>
+</body>
+</html>
