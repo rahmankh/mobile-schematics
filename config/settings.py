@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'accounts',
     'schematics',
     'subscriptions',
+    'payments',
     'web',
 ]
 
@@ -203,3 +204,14 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'web:login'
 LOGIN_REDIRECT_URL = 'web:home'
 LOGOUT_REDIRECT_URL = 'web:home'
+
+# Payment adapters. Keep PAYMENT_GATEWAY=mock until Zarinpal/IDPay keys exist.
+PAYMENT_GATEWAY = env('PAYMENT_GATEWAY', default='mock')
+PAYMENT_CALLBACK_URL = env('PAYMENT_CALLBACK_URL', default='')
+PAYMENT_START_URL_TEMPLATE = env(
+    'PAYMENT_START_URL_TEMPLATE',
+    default='https://sandbox.zarinpal.com/pg/StartPay/{authority}',
+)
+PAYMENT_MOCK_SUCCESS = env.bool('PAYMENT_MOCK_SUCCESS', default=True)
+PAYMENT_ZARINPAL_MERCHANT_ID = env('PAYMENT_ZARINPAL_MERCHANT_ID', default='')
+PAYMENT_IDPAY_API_KEY = env('PAYMENT_IDPAY_API_KEY', default='')

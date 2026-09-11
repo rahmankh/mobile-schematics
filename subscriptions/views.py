@@ -1,82 +1,80 @@
+"""
+Subscription catalog and checkout.
 
+Plan listing and "my subscription" stay read-only. Purchase POSTs start a
+payment session and must not insert UserSubscription until verify() succeeds.
+"""
 
 from rest_framework import generics, status
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from django.utils import timezone
-from datetime import timedelta
+from rest_framework.views import APIView
+
+from payments.models import PaymentTransaction
+from payments.serializers import PaymentTransactionSerializer
+from payments.services import PaymentConflict, PaymentError, create_payment_request
 
 from .models import Plan, UserSubscription
-from .serializers import PlanSerializer, UserSubscriptionSerializer, SubscribeRequestSerializer
+from .serializers import PlanSerializer, SubscribeRequestSerializer, UserSubscriptionSerializer
 
 
 class PlanListAPIView(generics.ListAPIView):
-    """مشاهده لیست پلن‌های فعال"""
+    """GET active subscription SKUs."""
+
     queryset = Plan.objects.filter(is_active=True)
     serializer_class = PlanSerializer
     permission_classes = [AllowAny]
 
 
 class CurrentUserSubscriptionAPIView(APIView):
-    """مشاهده وضعیت اشتراک فعلی کاربر لاگین‌شده"""
+    """GET the caller's currently valid subscription, if any."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        subscription = UserSubscription.objects.filter(
-            user=request.user,
-            status='active',
-            end_date__gt=timezone.now()
-        ).first()
-
+        subscription = (
+            UserSubscription.objects.filter(user=request.user)
+            .select_related('plan')
+            .active_subscriptions()
+            .order_by('-end_date')
+            .first()
+        )
         if not subscription:
             return Response(
-                {"detail": "شما در حال حاضر هیچ اشتراک فعالی ندارید.", "has_active_subscription": False},
-                status=status.HTTP_200_OK
+                {'detail': 'شما در حال حاضر هیچ اشتراک فعالی ندارید.', 'has_active_subscription': False},
+                status=status.HTTP_200_OK,
             )
-
-        serializer = UserSubscriptionSerializer(subscription)
-        data = serializer.data
-        data["has_active_subscription"] = True
+        data = UserSubscriptionSerializer(subscription).data
+        data['has_active_subscription'] = True
         return Response(data, status=status.HTTP_200_OK)
 
 
 class PurchaseSubscriptionAPIView(APIView):
     """
-    خرید/فعال‌سازی اشتراک
-    (در صورت فعال بودن اشتراک قبلی، تاریخ انقضا به انتهای اشتراک فعلی اضافه می‌شود)
+    POST /api/v1/subscriptions/purchase/
+
+    Starts a payment for `plan_id`. Does **not** activate the plan; the client
+    must complete GET /api/v1/payments/verify/ after the gateway redirect.
     """
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = SubscribeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        try:
+            txn, payment_url = create_payment_request(
+                user=request.user,
+                purpose=PaymentTransaction.Purpose.SUBSCRIPTION,
+                plan_id=serializer.validated_data['plan_id'],
+                request=request,
+            )
+        except PaymentConflict as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        except PaymentError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-        plan = Plan.objects.get(id=serializer.validated_data['plan_id'])
-        now = timezone.now()
-
-        # بررسی وجود اشتراک فعال قبلی جهت محاسبه تمدید
-        active_sub = UserSubscription.objects.filter(
-            user=request.user,
-            status='active',
-            end_date__gt=now
-        ).order_by('-end_date').first()
-
-        start_date = active_sub.end_date if active_sub else now
-        end_date = start_date + timedelta(days=plan.duration_days)
-
-        new_subscription = UserSubscription.objects.create(
-            user=request.user,
-            plan=plan,
-            start_date=start_date,
-            end_date=end_date,
-            status='active'
-        )
-
-        return Response(
-            {
-                "detail": "اشتراک شما با موفقیت فعال شد.",
-                "subscription": UserSubscriptionSerializer(new_subscription).data
-            },
-            status=status.HTTP_201_CREATED
-        )
+        payload = PaymentTransactionSerializer(txn).data
+        payload['payment_url'] = payment_url
+        payload['detail'] = 'به درگاه پرداخت هدایت شوید.'
+        return Response(payload, status=status.HTTP_201_CREATED)
