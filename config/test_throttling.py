@@ -28,6 +28,7 @@ def tight_throttles(settings):
         'login': '2/min',
         'otp': '2/min',
         'downloads': '2/min',
+        'guest_checkout': '2/min',
     }
     settings.REST_FRAMEWORK = {
         **settings.REST_FRAMEWORK,
@@ -111,3 +112,4 @@ def test_throttle_rates_are_configured():
     assert 'login' in rates
     assert 'otp' in rates
     assert 'downloads' in rates
+    assert 'guest_checkout' in rates

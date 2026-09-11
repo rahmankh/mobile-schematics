@@ -2,6 +2,9 @@
 
 from rest_framework import serializers
 
+from rest_framework.exceptions import ValidationError as DRFValidationError
+
+from accounts.phone import normalize_iranian_phone
 from .models import PaymentTransaction
 
 
@@ -43,3 +46,21 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
             'verified_at',
         ]
         read_only_fields = fields
+
+
+class GuestCheckoutSerializer(serializers.Serializer):
+    """
+    Unauthenticated single-schematic checkout.
+
+    Only a phone number and schematic id are required — no password.
+    """
+
+    phone_number = serializers.CharField()
+    schematic_id = serializers.IntegerField()
+
+    def validate_phone_number(self, value: str) -> str:
+        try:
+            return normalize_iranian_phone(value)
+        except DRFValidationError as exc:
+            raise serializers.ValidationError(exc.detail) from exc
+

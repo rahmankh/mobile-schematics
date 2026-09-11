@@ -14,6 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.reverse import reverse
 
+from accounts.services import get_or_create_checkout_user, issue_jwt_for
 from schematics.models import Schematic
 from schematics.services import AlreadyPurchased, SchematicNotPurchasable, assert_schematic_purchasable, fulfill_schematic_purchase
 from subscriptions.models import Plan
@@ -91,6 +92,62 @@ def create_payment_request(*, user, purpose: str, schematic_id=None, plan_id=Non
     ), issued.payment_url
 
 
+def start_guest_schematic_checkout(
+    *,
+    phone_number: str,
+    schematic_id,
+    request=None,
+) -> tuple[PaymentTransaction, str, str]:
+    """
+    Guest single-copy checkout: phone + schematic, no password.
+
+    The schematic is validated *before* creating a user so a typo or a free
+    document cannot spawn an empty guest account. Returns
+    (txn, payment_url, account_status) where account_status is one of
+    created / existing_guest / existing_registered.
+    """
+    try:
+        schematic = Schematic.objects.get(pk=schematic_id)
+    except Schematic.DoesNotExist as exc:
+        raise PaymentError('شماتیک مورد نظر یافت نشد.') from exc
+    if schematic.is_free or schematic.price <= 0:
+        raise PaymentError('این شماتیک برای خرید تکی در دسترس نیست.')
+
+    user, created = get_or_create_checkout_user(phone_number)
+    if created:
+        account_status = 'created'
+    elif user.is_guest:
+        account_status = 'existing_guest'
+    else:
+        account_status = 'existing_registered'
+
+    txn, payment_url = create_payment_request(
+        user=user,
+        purpose=PaymentTransaction.Purpose.SCHEMATIC,
+        schematic_id=schematic.pk,
+        request=request,
+    )
+    return txn, payment_url, account_status
+
+
+def verify_access_payload(user) -> dict:
+    """
+    Extra keys for GET /payments/verify/.
+
+    Guests (no login password) receive JWT so they can download immediately.
+    Registered technicians must sign in — issuing JWT here would let anyone who
+    knows a phone number hijack that account by paying for a cheap schematic.
+    """
+    payload = {
+        'is_guest': user.is_guest,
+        'login_required': not user.is_guest,
+        'phone_number': user.phone_number,
+    }
+    if user.is_guest:
+        payload.update(issue_jwt_for(user))
+    return payload
+
+
 def _default_callback(request) -> str:
     if request is None:
         return '/api/v1/payments/verify/'
@@ -152,7 +209,7 @@ def verify_and_fulfill(*, authority: str, gateway_ok: bool) -> PaymentTransactio
         txn.save(update_fields=['status', 'ref_id', 'verified_at'])
         _grant_entitlement(txn)
 
-    return txn
+    return PaymentTransaction.objects.select_related('user', 'schematic', 'plan').get(pk=txn.pk)
 
 
 def _grant_entitlement(txn: PaymentTransaction) -> None:

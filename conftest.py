@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from django.core.cache import cache
 from rest_framework.test import APIClient
 
 
@@ -37,3 +38,11 @@ def _isolate_file_storage(settings, tmp_path: Path):
     settings.SERVE_MEDIA = True
     settings.DEBUG = True
     yield
+
+
+@pytest.fixture(autouse=True)
+def _clear_throttle_cache():
+    """Keep LocMem rate-limit counters from leaking 429s between tests."""
+    cache.clear()
+    yield
+    cache.clear()

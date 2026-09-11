@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
+from rest_framework_simplejwt.tokens import RefreshToken
 
 User = get_user_model()
 
@@ -28,3 +29,9 @@ def get_or_create_checkout_user(phone_number: str):
         return user, True
     except IntegrityError:
         return User.objects.get(phone_number=phone_number), False
+
+
+def issue_jwt_for(user) -> dict[str, str]:
+    """Access + refresh pair used after guest payment verify."""
+    refresh = RefreshToken.for_user(user)
+    return {'refresh': str(refresh), 'access': str(refresh.access_token)}

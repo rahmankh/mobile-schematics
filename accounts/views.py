@@ -110,7 +110,7 @@ class SetPasswordView(APIView):
 
     permission_classes = [IsAuthenticated]
 
-    @extend_schema(tags=['accounts'], request=SetPasswordSerializer)
+    @extend_schema(tags=['accounts'], request=SetPasswordSerializer, responses={200: None})
     def post(self, request):
         if not request.user.is_guest:
             return Response(

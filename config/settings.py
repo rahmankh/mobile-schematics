@@ -199,6 +199,7 @@ REST_FRAMEWORK = {
         # Reserved for SMS OTP views; stricter because each send is billable.
         'otp': '5/minute',
         'downloads': '30/minute',
+        'guest_checkout': '20/minute',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }

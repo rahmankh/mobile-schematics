@@ -3,8 +3,11 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.exceptions import ValidationError as DRFValidationError
+from drf_spectacular.utils import extend_schema_field
 
 from accounts.phone import normalize_iranian_phone
+from schematics.serializers import SchematicPurchaseSerializer
+from subscriptions.serializers import UserSubscriptionSerializer
 
 User = get_user_model()
 
@@ -131,17 +134,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_has_active_subscription(self, obj) -> bool:
         return self._active_subscription(obj) is not None
 
+    @extend_schema_field(UserSubscriptionSerializer)
     def get_subscription(self, obj):
-        from subscriptions.serializers import UserSubscriptionSerializer
-
         sub = self._active_subscription(obj)
         if not sub:
             return None
         return UserSubscriptionSerializer(sub).data
 
+    @extend_schema_field(SchematicPurchaseSerializer(many=True))
     def get_purchases(self, obj):
-        from schematics.serializers import SchematicPurchaseSerializer
-
         qs = obj.schematic_purchases.select_related(
             'schematic',
             'schematic__phone_model__brand',

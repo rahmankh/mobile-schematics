@@ -31,3 +31,9 @@ class DownloadRateThrottle(UserRateThrottle):
     """Per-user cap for schematic file streaming."""
 
     scope = 'downloads'
+
+
+class GuestCheckoutRateThrottle(AnonRateThrottle):
+    """IP cap for passwordless schematic checkout (separate from login)."""
+
+    scope = 'guest_checkout'
