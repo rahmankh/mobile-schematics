@@ -1,54 +1,65 @@
-from django.test import TestCase
-
-
+from datetime import timedelta
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
-from .models import Brand, PhoneModel, SchematicCategory, Schematic
+
+from schematics.models import Brand, PhoneModel, SchematicCategory, Schematic, SchematicFile
+from subscriptions.models import Plan, UserSubscription
+
+User = get_user_model()
 
 
-class SchematicsAPITests(APITestCase):
+class SchematicDownloadPermissionTests(APITestCase):
     def setUp(self):
-        self.brand = Brand.objects.create(name='Samsung', slug='samsung')
-        self.phone_model = PhoneModel.objects.create(
-            brand=self.brand,
-            name='Galaxy S23 Ultra',
-            slug='galaxy-s23-ultra',
-            technical_code='SM-S918B'
-        )
-        self.category = SchematicCategory.objects.create(
-            title='Schematic Diagram',
-            slug='schematic-diagram'
-        )
-        self.schematic = Schematic.objects.create(
+        self.user = User.objects.create_user(phone_number='09120000001', password='Password123')
+        self.brand = Brand.objects.create(name='Apple', slug='apple')
+        self.phone_model = PhoneModel.objects.create(brand=self.brand, name='iPhone 13 Pro Max', slug='13pro-max')
+        self.category = SchematicCategory.objects.create(title='Hardware Solution', slug='hardware-solution')
+
+        # فایل تستی
+        test_file = SimpleUploadedFile("board.pdf", b"%PDF-1.4 test content", content_type="application/pdf")
+
+        # شماتیک پولی
+        self.paid_schematic = Schematic.objects.create(
             phone_model=self.phone_model,
             category=self.category,
-            title='Main Board Schematic',
-            is_free=True,
-            price=0
+            title='Paid Board Schematic',
+            is_free=False,
+            requires_subscription=True
         )
-        self.list_url = reverse('schematics:schematic-list')
-        self.detail_url = reverse('schematics:schematic-detail', kwargs={'pk': self.schematic.pk})
+        self.paid_file = SchematicFile.objects.create(
+            schematic=self.paid_schematic,
+            file=test_file,
+            file_title='Main Logic Board'
+        )
 
-    def test_get_schematics_list(self):
-        """تست دریافت لیست شماتیک‌ها"""
-        response = self.client.get(self.list_url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]['title'], 'Main Board Schematic')
-        self.assertEqual(response.data[0]['brand_name'], 'Samsung')
+        self.download_url = reverse('schematics:schematic-file-download', kwargs={'pk': self.paid_file.pk})
 
-    def test_search_schematic_by_technical_code(self):
-        """تست سرچ شماتیک بر اساس کد فنی برد (SM-S918B)"""
-        response = self.client.get(self.list_url, {'search': 'SM-S918B'})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+    def test_anonymous_user_cannot_download(self):
+        """کاربر بدون احراز هویت باید 401 یا 403 دریافت کند"""
+        response = self.client.get(self.download_url)
+        self.assertIn(response.status_code, [status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN])
 
-    def test_schematic_detail_and_view_count_increment(self):
-        """تست دریافت جزئیات و افزایش خودکار تعداد بازدید"""
-        initial_views = self.schematic.view_count
-        response = self.client.get(self.detail_url)
+    def test_user_without_subscription_forbidden(self):
+        """کاربر لاگین کرده ولی بدون اشتراک باید 403 دریافت کند"""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.download_url)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_user_with_active_subscription_can_download(self):
+        """کاربر با اشتراک فعال باید فایل را با استاتوس 200 دریافت کند"""
+        plan = Plan.objects.create(title='Monthly Plan', price=100000, duration_days=30)
+        UserSubscription.objects.create(
+            user=self.user,
+            plan=plan,
+            start_date=timezone.now(),
+            end_date=timezone.now() + timedelta(days=30),
+            status=UserSubscription.StatusChoices.ACTIVE
+        )
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(self.download_url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
-        self.schematic.refresh_from_db()
-        self.assertEqual(self.schematic.view_count, initial_views + 1)

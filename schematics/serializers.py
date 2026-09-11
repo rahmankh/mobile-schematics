@@ -1,12 +1,25 @@
+"""
+REST serializers for the schematics catalog.
+
+Public list/detail payloads never include a raw filesystem or MEDIA path.
+File downloads are exposed only as a reverse() of `schematics:schematic-file-download`,
+which is an authenticated, permission-checked streaming endpoint.
+"""
+
 from rest_framework import serializers
-from .models import Brand, PhoneModel, SchematicCategory, Schematic, SchematicFile
+
+from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile
 
 
 class BrandSerializer(serializers.ModelSerializer):
     """
-    Serializer for Brand listing with phone models count.
+    Brand row for the home catalog.
+
+    `models_count` is injected by BrandListView via annotate(Count('phone_models')).
+    It is NOT `phone_models.count` in Python — that would N+1 query per brand.
     """
-    models_count = serializers.IntegerField(source='phone_models.count', read_only=True)
+
+    models_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Brand
@@ -14,9 +27,8 @@ class BrandSerializer(serializers.ModelSerializer):
 
 
 class PhoneModelSerializer(serializers.ModelSerializer):
-    """
-    Serializer for PhoneModel with related brand info.
-    """
+    """Phone model with denormalized brand name for list cells that skip an extra join on the client."""
+
     brand_name = serializers.CharField(source='brand.name', read_only=True)
 
     class Meta:
@@ -25,9 +37,8 @@ class PhoneModelSerializer(serializers.ModelSerializer):
 
 
 class SchematicCategorySerializer(serializers.ModelSerializer):
-    """
-    Serializer for Schematic Categories.
-    """
+    """Category used both as a filter chip and as a nested object on schematic detail."""
+
     class Meta:
         model = SchematicCategory
         fields = ['id', 'title', 'slug', 'description']
@@ -35,22 +46,37 @@ class SchematicCategorySerializer(serializers.ModelSerializer):
 
 class SchematicFileListSerializer(serializers.ModelSerializer):
     """
-    Serializer to expose file metadata without direct download link for unauthorized users.
+    Public file metadata for schematic detail.
+
+    `download_url` MUST reverse `schematics:schematic-file-download` (the name
+    declared in schematics/urls.py). A mismatched view_name raises NoReverseMatch
+    and 500s the entire detail endpoint.
     """
+
+    download_url = serializers.HyperlinkedIdentityField(
+        view_name='schematics:schematic-file-download',
+        lookup_field='pk',
+    )
+
     class Meta:
         model = SchematicFile
-        fields = ['id', 'file_title', 'file_size_bytes', 'created_at']
+        fields = ['id', 'file_title', 'file_size_bytes', 'download_url', 'created_at']
+        # Intentionally omit `file` — FileField would call storage.url() or expose a MEDIA path.
 
 
 class SchematicListSerializer(serializers.ModelSerializer):
     """
-    Lightweight serializer for listing schematics on search/home pages.
+    Compact card payload for search / home lists.
+
+    `files_count` is annotated in SchematicListView; default=0 keeps unit tests
+    that instantiate the serializer without a queryset from crashing.
     """
+
     brand_name = serializers.CharField(source='phone_model.brand.name', read_only=True)
     phone_model_name = serializers.CharField(source='phone_model.name', read_only=True)
     technical_code = serializers.CharField(source='phone_model.technical_code', read_only=True)
     category_title = serializers.CharField(source='category.title', read_only=True)
-    files_count = serializers.IntegerField(source='files.count', read_only=True)
+    files_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Schematic
@@ -70,9 +96,8 @@ class SchematicListSerializer(serializers.ModelSerializer):
 
 
 class SchematicDetailSerializer(serializers.ModelSerializer):
-    """
-    Detailed serializer including troubleshooting notes and attached file objects.
-    """
+    """Full schematic document including nested files with gated download URLs."""
+
     phone_model = PhoneModelSerializer(read_only=True)
     category = SchematicCategorySerializer(read_only=True)
     files = SchematicFileListSerializer(many=True, read_only=True)
@@ -95,10 +120,10 @@ class SchematicDetailSerializer(serializers.ModelSerializer):
         ]
 
 
-# schematics/serializers.py
-
 class SchematicFileSerializer(serializers.ModelSerializer):
+    """Write serializer for admin/API uploads. Not used for public download."""
+
     class Meta:
         model = SchematicFile
-        fields = ('id', 'schematic', 'file')
-        read_only_fields = ('id',)
+        fields = ['id', 'schematic', 'file', 'file_title', 'file_size_bytes', 'created_at']
+        read_only_fields = ['id', 'file_size_bytes', 'created_at']
