@@ -64,7 +64,8 @@ class PhoneModelListView(generics.ListAPIView):
         brand_slug = self.request.query_params.get('brand')
         if brand_slug:
             queryset = queryset.filter(brand__slug=brand_slug)
-        return queryset
+        # Explicit order: annotate/filter can drop Meta.ordering and break pages.
+        return queryset.order_by('brand__name', 'name', 'pk')
 
 
 class SchematicCategoryListView(generics.ListAPIView):
@@ -109,7 +110,8 @@ class SchematicListView(generics.ListAPIView):
         if phone_model_id:
             queryset = queryset.filter(phone_model_id=phone_model_id)
 
-        return queryset
+        # Count() annotations drop Meta.ordering; pin a stable page order.
+        return queryset.order_by('-created_at', 'pk')
 
 
 class SchematicDetailView(generics.RetrieveAPIView):

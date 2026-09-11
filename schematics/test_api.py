@@ -75,7 +75,7 @@ class TestSchematicDetailAPI:
         response = api_client.get(reverse('schematics:schematic-list'))
 
         assert response.status_code == status.HTTP_200_OK
-        row = next(item for item in response.data if item['id'] == schematic.pk)
+        row = next(item for item in response.data['results'] if item['id'] == schematic.pk)
         assert row['files_count'] == 2
 
     def test_list_can_filter_by_category_slug_and_model_id(self, api_client):
@@ -90,7 +90,7 @@ class TestSchematicDetailAPI:
             {'category': 'boardview', 'model_id': model.pk},
         )
 
-        ids = [row['id'] for row in response.data]
+        ids = [row['id'] for row in response.data['results']]
         assert matching.pk in ids
         assert len(ids) == 1
 
@@ -101,7 +101,7 @@ class TestSchematicDetailAPI:
 
         response = api_client.get(reverse('schematics:brand-list'))
 
-        row = next(item for item in response.data if item['slug'] == 'xiaomi')
+        row = next(item for item in response.data['results'] if item['slug'] == 'xiaomi')
         assert row['models_count'] == 2
 
     def test_phone_model_list_filters_by_brand_slug(self, api_client):
@@ -112,5 +112,5 @@ class TestSchematicDetailAPI:
 
         response = api_client.get(reverse('schematics:phone-model-list'), {'brand': 'samsung'})
 
-        names = [row['name'] for row in response.data]
+        names = [row['name'] for row in response.data['results']]
         assert names == ['A55']
