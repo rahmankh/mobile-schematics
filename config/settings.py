@@ -114,6 +114,11 @@ DATABASES = {
 # Persistent connections help Postgres in production; 0 is correct for SQLite + tests.
 DATABASES['default']['CONN_MAX_AGE'] = env.int('CONN_MAX_AGE', default=0)
 
+# Rate-limit counters. LocMem is process-local (fine for tests/dev); use Redis in prod.
+CACHES = {
+    'default': env.cache('CACHE_URL', default='locmemcache://'),
+}
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
@@ -187,6 +192,13 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PAGINATION_CLASS': 'config.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
+    'DEFAULT_THROTTLE_RATES': {
+        # login covers register + token refresh as well (same IP budget).
+        'login': '10/minute',
+        # Reserved for SMS OTP views; stricter because each send is billable.
+        'otp': '5/minute',
+        'downloads': '30/minute',
+    },
 }
 
 # ---------------------------------------------------------------------------

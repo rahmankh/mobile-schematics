@@ -1,8 +1,10 @@
 from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import get_user_model
+
+from config.throttling import LoginRateThrottle
 
 from .serializers import (
     TechnicianRegisterSerializer,
@@ -20,6 +22,7 @@ class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = TechnicianRegisterSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -45,6 +48,14 @@ class CustomLoginView(TokenObtainPairView):
     """
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    """Rotate access tokens. Shares the login IP budget to slow token stuffing."""
+
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):

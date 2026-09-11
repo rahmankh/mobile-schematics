@@ -17,6 +17,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.throttling import DownloadRateThrottle
+
 from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 from .serializers import (
     BrandSerializer,
@@ -147,6 +149,7 @@ class SchematicFileDownloadView(APIView):
     """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [DownloadRateThrottle]
 
     def get(self, request, pk, *args, **kwargs):
         try:
