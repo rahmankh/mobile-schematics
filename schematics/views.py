@@ -16,6 +16,8 @@ from rest_framework import filters, generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
 from config.throttling import DownloadRateThrottle
 
@@ -61,6 +63,19 @@ class PhoneModelListView(generics.ListAPIView):
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'technical_code']
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                'brand',
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description='Filter by Brand.slug (e.g. samsung).',
+            ),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self):
         queryset = PhoneModel.objects.select_related('brand').all()
         brand_slug = self.request.query_params.get('brand')
@@ -95,6 +110,25 @@ class SchematicListView(generics.ListAPIView):
         'phone_model__brand__name',
     ]
     ordering_fields = ['created_at', 'price', 'view_count']
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                'category',
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description='Filter by SchematicCategory.slug.',
+            ),
+            OpenApiParameter(
+                'model_id',
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description='Filter by PhoneModel primary key.',
+            ),
+        ],
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
     def get_queryset(self):
         queryset = Schematic.objects.select_related(
@@ -140,6 +174,14 @@ class SchematicDetailView(generics.RetrieveAPIView):
         return obj
 
 
+@extend_schema(
+    tags=['schematics'],
+    responses={
+        200: OpenApiResponse(description='Binary file (Content-Disposition: attachment).'),
+        403: OpenApiResponse(description='Caller is not entitled to this schematic.'),
+        404: OpenApiResponse(description='File row or bytes are missing.'),
+    },
+)
 class SchematicFileDownloadView(APIView):
     """
     GET /api/v1/schematics/files/<id>/download/
@@ -194,6 +236,18 @@ class SchematicFileDownloadView(APIView):
         )
 
 
+@extend_schema_view(
+    get=extend_schema(tags=['schematics'], responses=SchematicPurchaseSerializer(many=True)),
+    post=extend_schema(
+        tags=['schematics'],
+        request=SchematicPurchaseCheckoutSerializer,
+        responses={
+            402: OpenApiResponse(description='Payment required; client must POST /api/v1/payments/request/.'),
+            400: OpenApiResponse(description='Schematic is not purchasable.'),
+            409: OpenApiResponse(description='Already owned.'),
+        },
+    ),
+)
 class SchematicPurchaseListCreateView(APIView):
     """
     GET  /api/v1/schematics/purchases/  — ledger of schematics this user already owns.

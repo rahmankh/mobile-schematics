@@ -5,6 +5,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import get_user_model
 
 from config.throttling import LoginRateThrottle
+from drf_spectacular.utils import extend_schema
 
 from .serializers import (
     TechnicianRegisterSerializer,
@@ -49,6 +50,10 @@ class CustomLoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
+
+    @extend_schema(tags=['accounts'])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 
 class CustomTokenRefreshView(TokenRefreshView):

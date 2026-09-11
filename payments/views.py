@@ -9,6 +9,7 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from .models import PaymentTransaction
 from .serializers import PaymentRequestSerializer, PaymentTransactionSerializer
@@ -25,6 +26,11 @@ class PaymentRequestView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['payments'],
+        request=PaymentRequestSerializer,
+        responses={201: PaymentTransactionSerializer},
+    )
     def post(self, request):
         serializer = PaymentRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -57,6 +63,10 @@ class PaymentVerifyView(APIView):
 
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        tags=['payments'],
+        responses={200: PaymentTransactionSerializer},
+    )
     def get(self, request):
         authority = request.query_params.get('Authority') or request.query_params.get('authority')
         raw_status = (request.query_params.get('Status') or request.query_params.get('status') or '')

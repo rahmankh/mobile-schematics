@@ -9,6 +9,7 @@ from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from payments.models import PaymentTransaction
 from payments.serializers import PaymentTransactionSerializer
@@ -31,6 +32,7 @@ class CurrentUserSubscriptionAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(tags=['subscriptions'], responses=UserSubscriptionSerializer)
     def get(self, request):
         subscription = (
             UserSubscription.objects.filter(user=request.user)
@@ -59,6 +61,11 @@ class PurchaseSubscriptionAPIView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        tags=['subscriptions'],
+        request=SubscribeRequestSerializer,
+        responses={201: PaymentTransactionSerializer},
+    )
     def post(self, request):
         serializer = SubscribeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

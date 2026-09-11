@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'drf_spectacular',
     # Local
     'accounts',
     'schematics',
@@ -199,6 +200,26 @@ REST_FRAMEWORK = {
         'otp': '5/minute',
         'downloads': '30/minute',
     },
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# OpenAPI 3 schema + Swagger UI at /api/docs/ (schema JSON/YAML at /api/schema/).
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Mobile Schematics API',
+    'DESCRIPTION': (
+        'REST API for the technician schematic catalog: JWT auth, catalog browse, '
+        'gated file downloads, subscriptions, and payment checkout.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'SCHEMA_PATH_PREFIX': r'/api/v1',
+    'COMPONENT_SPLIT_REQUEST': True,
+    'TAGS': [
+        {'name': 'accounts', 'description': 'Registration, JWT login, and technician profile.'},
+        {'name': 'schematics', 'description': 'Catalog browse, single-copy checkout, and gated downloads.'},
+        {'name': 'subscriptions', 'description': 'Plans and the caller\'s current entitlement.'},
+        {'name': 'payments', 'description': 'Gateway request/verify. Content unlocks only after verify.'},
+    ],
 }
 
 # ---------------------------------------------------------------------------
