@@ -1,0 +1,51 @@
+{% extends "web/base.html" %}
+
+{% block title %}{{ schematic.title }}{% endblock %}
+
+{% block content %}
+<p class="breadcrumb">
+    <a href="{% url 'web:home' %}">کاتالوگ</a>
+    · <a href="{% url 'web:brand-detail' schematic.phone_model.brand.slug %}">{{ schematic.phone_model.brand.name }}</a>
+    · <a href="{% url 'web:model-detail' schematic.phone_model.brand.slug schematic.phone_model.slug %}">{{ schematic.phone_model.name }}</a>
+    · {{ schematic.title }}
+</p>
+
+<section class="hero">
+    <h1>{{ schematic.title }}</h1>
+    <p class="lede">{{ schematic.phone_model.brand.name }} {{ schematic.phone_model.name }} · {{ schematic.category.title }}</p>
+    <div class="pills">
+        {% if schematic.is_free %}
+        <span class="pill free">رایگان</span>
+        {% else %}
+        <span class="pill paid">خرید تکی {{ schematic.price }} تومان</span>
+        {% endif %}
+        {% if schematic.requires_subscription %}
+        <span class="pill">با اشتراک قابل دانلود</span>
+        {% endif %}
+    </div>
+</section>
+
+{% if schematic.description %}
+<h2 class="section-title">نکات فنی</h2>
+<p class="lede">{{ schematic.description }}</p>
+{% endif %}
+
+<h2 class="section-title">فایل‌ها</h2>
+{% for file in schematic.files.all %}
+<div class="file-row">
+    <div>
+        <strong>{{ file.file_title }}</strong>
+        <div class="meta">{{ file.file_size_bytes }} بایت</div>
+    </div>
+    {% if can_download %}
+    <a class="btn btn-primary" href="{% url 'schematics:schematic-file-download' file.pk %}">دانلود</a>
+    {% elif user.is_authenticated %}
+    <span class="pill paid">نیاز به اشتراک یا خرید</span>
+    {% else %}
+    <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای دانلود وارد شوید</a>
+    {% endif %}
+</div>
+{% empty %}
+<div class="empty">فایلی برای این شماتیک ثبت نشده است.</div>
+{% endfor %}
+{% endblock %}

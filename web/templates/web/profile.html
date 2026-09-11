@@ -1,0 +1,30 @@
+{% extends "web/base.html" %}
+
+{% block title %}پروفایل تکنسین{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>پروفایل تکنسین</h1>
+    <p class="lede">مشخصات حساب و وضعیت اشتراک فعلی.</p>
+</section>
+
+<div class="login-card" style="margin:0; max-width:560px;">
+    <div class="dl">
+        <div><span>نام</span><strong>{{ user.get_full_name|default:"—" }}</strong></div>
+        <div><span>موبایل</span><strong dir="ltr">{{ user.phone_number }}</strong></div>
+        <div><span>تعمیرگاه</span><strong>{{ user.repair_shop_name|default:"—" }}</strong></div>
+        <div><span>نقش</span><strong>{{ user.get_role_display }}</strong></div>
+        <div>
+            <span>اشتراک</span>
+            <strong>
+                {% if subscription %}
+                    {{ subscription.plan.title }} تا {{ subscription.end_date|date:"Y/m/d" }}
+                {% else %}
+                    اشتراک فعال ندارید
+                {% endif %}
+            </strong>
+        </div>
+        <div><span>خریدهای تکی</span><strong>{{ purchase_count }}</strong></div>
+    </div>
+</div>
+{% endblock %}

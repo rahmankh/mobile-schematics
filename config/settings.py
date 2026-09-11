@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     'accounts',
     'schematics',
     'subscriptions',
+    'web',
 ]
 
 MIDDLEWARE = [
@@ -197,3 +198,8 @@ X_FRAME_OPTIONS = 'DENY'
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# HTML catalog (web app) uses Django sessions. The mobile API still uses JWT.
+LOGIN_URL = 'web:login'
+LOGIN_REDIRECT_URL = 'web:home'
+LOGOUT_REDIRECT_URL = 'web:home'

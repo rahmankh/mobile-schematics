@@ -1,0 +1,49 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}شماتیک موبایل{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'web/app.css' %}">
+</head>
+<body>
+    <header class="topbar">
+        <a class="logo" href="{% url 'web:home' %}">
+            <span class="logo-mark">ش</span>
+            <span>
+                <strong>شماتیک موبایل</strong>
+                <small>نقشه و بردویو تعمیرکاران</small>
+            </span>
+        </a>
+        <div class="auth-box">
+            {% if user.is_authenticated %}
+                <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل تکنسین">
+                    <span class="avatar">{% firstof user.first_name|slice:":1" "ت" %}</span>
+                    <span class="profile-meta">
+                        <strong>{{ user.get_full_name|default:"تکنسین" }}</strong>
+                        <small class="phone">{{ user.phone_number }}</small>
+                    </span>
+                </a>
+                <form method="post" action="{% url 'web:logout' %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-ghost">خروج</button>
+                </form>
+            {% else %}
+                <a class="btn btn-ghost" href="{% url 'web:login' %}">ورود</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="page">
+        {% if messages %}
+            <ul class="messages">
+                {% for message in messages %}
+                    <li class="{{ message.tags }}">{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

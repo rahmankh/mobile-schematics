@@ -1,0 +1,31 @@
+{% extends "web/base.html" %}
+
+{% block title %}ورود تکنسین{% endblock %}
+
+{% block content %}
+<div class="login-card">
+    <h1>ورود به حساب تکنسین</h1>
+    <p class="lede">با شماره موبایل و رمز عبور وارد شوید تا پروفایل و دانلود برایتان فعال شود.</p>
+    <form method="post" action="{% url 'web:login' %}">
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        {{ form.non_field_errors }}
+        <div class="form-field">
+            <label for="{{ form.username.id_for_label }}">{{ form.username.label }}</label>
+            {{ form.username }}
+            {{ form.username.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+        <button class="btn btn-primary" type="submit">ورود</button>
+    </form>
+    <div class="hint">
+        نمونه محلی:<br>
+        09121111111 / TechPass123!<br>
+        09122222222 / SubPass123!
+    </div>
+</div>
+{% endblock %}

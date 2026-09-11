@@ -1,0 +1,40 @@
+{% extends "web/base.html" %}
+
+{% block title %}{{ phone_model.name }}{% endblock %}
+
+{% block content %}
+<p class="breadcrumb">
+    <a href="{% url 'web:home' %}">کاتالوگ</a>
+    · <a href="{% url 'web:brand-detail' brand.slug %}">{{ brand.name }}</a>
+    · {{ phone_model.name }}
+</p>
+<section class="hero">
+    <h1>{{ brand.name }} {{ phone_model.name }}</h1>
+    <p class="lede">
+        {% if phone_model.technical_code %}شناسه برد {{ phone_model.technical_code }} · {% endif %}
+        شماتیک، boardview و مسیر ولتاژ این مدل
+    </p>
+</section>
+
+{% if schematics %}
+<div class="grid">
+    {% for item in schematics %}
+    <a class="card" href="{% url 'web:schematic-detail' item.pk %}">
+        <div>
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.category.title }} · {{ item.files_count }} فایل</p>
+        </div>
+        <div class="pills">
+            {% if item.is_free %}
+            <span class="pill free">رایگان</span>
+            {% else %}
+            <span class="pill paid">{{ item.price }} تومان</span>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">برای این مدل هنوز شماتیکی بارگذاری نشده است.</div>
+{% endif %}
+{% endblock %}

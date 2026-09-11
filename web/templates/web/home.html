@@ -1,0 +1,75 @@
+{% extends "web/base.html" %}
+
+{% block title %}کاتالوگ شماتیک موبایل{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>نقشه و بردویو گوشی‌های پرطرفدار</h1>
+    <p>برند را انتخاب کنید، مدل را باز کنید و شماتیک، boardview و مسیر ولتاژ را ببینید.</p>
+</section>
+
+<h2 class="section-title">برندها</h2>
+{% if brands %}
+<div class="grid">
+    {% for brand in brands %}
+    <a class="card" href="{% url 'web:brand-detail' brand.slug %}">
+        <div class="card-head">
+            <div class="brand-letter">{{ brand.name|slice:":1" }}</div>
+            <div>
+                <h3>{{ brand.name }}</h3>
+                <p>{{ brand.models_count }} مدل · {{ brand.schematics_count }} شماتیک</p>
+            </div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">هنوز برندی در کاتالوگ نیست. برای دادهٔ نمونه دستور <code>seed_demo_data</code> را اجرا کنید.</div>
+{% endif %}
+
+{% if categories %}
+<h2 class="section-title">دسته‌بندی نقشه‌ها</h2>
+<div class="pills">
+    {% for category in categories %}
+    <span class="pill">{{ category.title }} ({{ category.schematics_count }})</span>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if sample_models %}
+<h2 class="section-title">مدل‌های نمونه</h2>
+<div class="grid">
+    {% for model in sample_models %}
+    <a class="card" href="{% url 'web:model-detail' model.brand.slug model.slug %}">
+        <div>
+            <h3>{{ model.name }}</h3>
+            <p>{{ model.brand.name }}{% if model.technical_code %} · {{ model.technical_code }}{% endif %}</p>
+        </div>
+        <span class="pill">{{ model.schematics_count }} شماتیک</span>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if featured_schematics %}
+<h2 class="section-title">شماتیک‌های تازه‌وارد</h2>
+<div class="grid">
+    {% for item in featured_schematics %}
+    <a class="card" href="{% url 'web:schematic-detail' item.pk %}">
+        <div>
+            <h3>{{ item.title }}</h3>
+            <p>{{ item.phone_model.brand.name }} · {{ item.phone_model.name }}</p>
+        </div>
+        <div class="pills">
+            <span class="pill">{{ item.category.title }}</span>
+            {% if item.is_free %}
+            <span class="pill free">رایگان</span>
+            {% else %}
+            <span class="pill paid">{{ item.price }} تومان</span>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -2,7 +2,6 @@
 
 from django.contrib import admin
 from django.urls import include, path
-from django.views.generic import TemplateView
 
 from config.media_views import serve_public_media
 
@@ -10,7 +9,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     # Required by templates/admin/base_site.html language switcher.
     path('i18n/', include('django.conf.urls.i18n')),
-    path('', TemplateView.as_view(template_name='home.html'), name='home'),
+    path('', include('web.urls')),
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/schematics/', include('schematics.urls')),
     path('api/v1/subscriptions/', include('subscriptions.urls')),

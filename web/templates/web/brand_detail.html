@@ -1,0 +1,30 @@
+{% extends "web/base.html" %}
+
+{% block title %}{{ brand.name }}{% endblock %}
+
+{% block content %}
+<p class="breadcrumb">
+    <a href="{% url 'web:home' %}">کاتالوگ</a>
+    · {{ brand.name }}
+</p>
+<section class="hero">
+    <h1>{{ brand.name }}</h1>
+    <p class="lede">مدل‌های ثبت‌شده برای این برند. روی هر کارت بزنید تا شماتیک‌ها باز شوند.</p>
+</section>
+
+{% if brand.phone_models.all %}
+<div class="grid">
+    {% for model in brand.phone_models.all %}
+    <a class="card" href="{% url 'web:model-detail' brand.slug model.slug %}">
+        <div>
+            <h3>{{ model.name }}</h3>
+            <p>{% if model.technical_code %}کد فنی: {{ model.technical_code }}{% else %}کد فنی ثبت نشده{% endif %}</p>
+        </div>
+        <span class="pill">{{ model.schematics_count }} شماتیک</span>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty">برای این برند هنوز مدلی ثبت نشده است.</div>
+{% endif %}
+{% endblock %}
