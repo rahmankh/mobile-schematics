@@ -76,6 +76,9 @@ class TestDownloadEndpointPermissions:
             status.HTTP_401_UNAUTHORIZED,
             status.HTTP_403_FORBIDDEN,
         )
+        assert response.data['code'] == 'login_required'
+        assert 'مهمان' in str(response.data['detail']) or 'وارد' in str(response.data['detail'])
+        assert response.data['guest_checkout_allowed'] is True
 
     def test_authenticated_user_without_entitlement_is_forbidden(self, api_client):
         user = UserFactory()
@@ -84,6 +87,9 @@ class TestDownloadEndpointPermissions:
         url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         response = api_client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['code'] in ('entitlement_required', 'purchase_required')
+        assert 'اشتراک' in str(response.data['detail']) or 'خرید' in str(response.data['detail'])
+        assert 'can_purchase' in response.data
 
     def test_subscriber_can_download_bytes(self, api_client):
         user = UserFactory()

@@ -1,8 +1,10 @@
-import re
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from rest_framework.exceptions import ValidationError as DRFValidationError
+
+from accounts.phone import normalize_iranian_phone
 
 User = get_user_model()
 
@@ -32,17 +34,10 @@ class TechnicianRegisterSerializer(serializers.ModelSerializer):
         ]
 
     def validate_phone_number(self, value: str) -> str:
-        cleaned_phone = value.strip()
-        pattern = r'^(0|\+98)?9\d{9}$'
-        if not re.match(pattern, cleaned_phone):
-            raise serializers.ValidationError("شماره موبایل وارد شده معتبر نیست.")
-        
-        if cleaned_phone.startswith('+98'):
-            cleaned_phone = '0' + cleaned_phone[3:]
-        elif cleaned_phone.startswith('98'):
-            cleaned_phone = '0' + cleaned_phone[2:]
-        elif not cleaned_phone.startswith('0'):
-            cleaned_phone = '0' + cleaned_phone
+        try:
+            cleaned_phone = normalize_iranian_phone(value)
+        except DRFValidationError as exc:
+            raise serializers.ValidationError(exc.detail) from exc
 
         if User.objects.filter(phone_number=cleaned_phone).exists():
             raise serializers.ValidationError("کاربری با این شماره موبایل قبلاً ثبت‌نام کرده است.")
@@ -61,7 +56,14 @@ class TechnicianRegisterSerializer(serializers.ModelSerializer):
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """JWT login. Phone is normalized so +98 and 09 forms hit the same row."""
+
     def validate(self, attrs):
+        raw = attrs.get(self.username_field)
+        try:
+            attrs[self.username_field] = normalize_iranian_phone(raw)
+        except DRFValidationError as exc:
+            raise serializers.ValidationError({self.username_field: exc.detail}) from exc
         data = super().validate(attrs)
         data['user'] = {
             'id': self.user.id,
@@ -69,11 +71,24 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'last_name': self.user.last_name,
             'repair_shop_name': getattr(self.user, 'repair_shop_name', ''),
+            'is_guest': self.user.is_guest,
         }
         return data
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    """
+    Status dashboard: identity plus the caller's live entitlement snapshot.
+
+    `subscription` / `purchases` are read-only; commerce writes happen in payments.
+    """
+
+    is_guest = serializers.BooleanField(read_only=True)
+    has_active_subscription = serializers.SerializerMethodField()
+    subscription = serializers.SerializerMethodField()
+    purchases = serializers.SerializerMethodField()
+    purchase_count = serializers.SerializerMethodField()
+
     class Meta:
         model = User
         fields = [
@@ -83,5 +98,79 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'last_name',
             'repair_shop_name',
             'date_joined',
+            'is_guest',
+            'has_active_subscription',
+            'subscription',
+            'purchases',
+            'purchase_count',
         ]
-        read_only_fields = ['id', 'phone_number', 'date_joined']
+        read_only_fields = [
+            'id',
+            'phone_number',
+            'date_joined',
+            'is_guest',
+            'has_active_subscription',
+            'subscription',
+            'purchases',
+            'purchase_count',
+        ]
+
+    def _active_subscription(self, obj):
+        if hasattr(obj, '_active_subscription'):
+            return obj._active_subscription
+        from subscriptions.models import UserSubscription
+
+        return (
+            UserSubscription.objects.filter(user=obj)
+            .select_related('plan')
+            .active_subscriptions()
+            .order_by('-end_date')
+            .first()
+        )
+
+    def get_has_active_subscription(self, obj) -> bool:
+        return self._active_subscription(obj) is not None
+
+    def get_subscription(self, obj):
+        from subscriptions.serializers import UserSubscriptionSerializer
+
+        sub = self._active_subscription(obj)
+        if not sub:
+            return None
+        return UserSubscriptionSerializer(sub).data
+
+    def get_purchases(self, obj):
+        from schematics.serializers import SchematicPurchaseSerializer
+
+        qs = obj.schematic_purchases.select_related(
+            'schematic',
+            'schematic__phone_model__brand',
+        ).order_by('-created_at')
+        return SchematicPurchaseSerializer(qs, many=True).data
+
+    def get_purchase_count(self, obj) -> int:
+        # Uses the prefetch cache when ProfileView prefetched schematic_purchases.
+        return obj.schematic_purchases.count()
+
+
+class SetPasswordSerializer(serializers.Serializer):
+    """Upgrade a guest (unusable password) into a password-login technician."""
+
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password],
+        style={'input_type': 'password'},
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+    )
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError(
+                {'password_confirm': 'رمزهای عبور وارد شده یکسان نیستند.'}
+            )
+        return attrs

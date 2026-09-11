@@ -83,3 +83,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     def get_full_name(self) -> str:
         return f'{self.first_name} {self.last_name}'.strip()
+
+    @property
+    def is_guest(self) -> bool:
+        """True when checkout created the row and no login password has been set."""
+        return not self.has_usable_password()

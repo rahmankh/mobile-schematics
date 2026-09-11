@@ -20,6 +20,7 @@ from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
 from config.throttling import DownloadRateThrottle
+from .access import denied_download_payload
 
 from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 from .serializers import (
@@ -187,10 +188,11 @@ class SchematicFileDownloadView(APIView):
     GET /api/v1/schematics/files/<id>/download/
 
     Streams the binary from ProtectedSchematicStorage after Schematic.user_can_download
-    succeeds. Never redirects to /media/; the file handle comes from storage.open().
+    succeeds. Anonymous callers get 401 with `code=login_required` (Persian copy +
+    guest-checkout hint) instead of DRF's default English 403/401.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     throttle_classes = [DownloadRateThrottle]
 
     def get(self, request, pk, *args, **kwargs):
@@ -203,15 +205,11 @@ class SchematicFileDownloadView(APIView):
             raise Http404(_('فایل مورد نظر یافت نشد.')) from exc
 
         if not schematic_file.schematic.user_can_download(request.user):
-            return Response(
-                {
-                    'detail': _(
-                        'برای دانلود این فایل باید اشتراک فعال تهیه کنید '
-                        'یا نقشه را به صورت تکی خریداری نمایید.'
-                    )
-                },
-                status=status.HTTP_403_FORBIDDEN,
+            payload, http_status = denied_download_payload(
+                request.user,
+                schematic_file.schematic,
             )
+            return Response(payload, status=http_status)
 
         if not schematic_file.file:
             return Response(
