@@ -17,14 +17,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile
+from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 from .serializers import (
     BrandSerializer,
     PhoneModelSerializer,
     SchematicCategorySerializer,
     SchematicDetailSerializer,
     SchematicListSerializer,
+    SchematicPurchaseCheckoutSerializer,
+    SchematicPurchaseSerializer,
 )
+from .services import AlreadyPurchased, SchematicNotPurchasable, assert_schematic_purchasable
 
 
 class BrandListView(generics.ListAPIView):
@@ -184,3 +187,47 @@ class SchematicFileDownloadView(APIView):
             as_attachment=True,
             filename=filename,
         )
+
+
+class SchematicPurchaseListCreateView(APIView):
+    """
+    GET  /api/v1/schematics/purchases/  — ledger of schematics this user already owns.
+    POST /api/v1/schematics/purchases/  — start checkout (does NOT insert a purchase).
+
+    POST returns 402 Payment Required with amount + schematic_id. The client must
+    call POST /api/v1/payments/request/ and only after verify() will
+    fulfill_schematic_purchase run.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        queryset = (
+            SchematicPurchase.objects.filter(user=request.user)
+            .select_related('schematic', 'schematic__phone_model__brand')
+            .order_by('-created_at')
+        )
+        return Response(SchematicPurchaseSerializer(queryset, many=True).data)
+
+    def post(self, request):
+        serializer = SchematicPurchaseCheckoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        schematic = serializer.validated_data['schematic_id']
+
+        try:
+            assert_schematic_purchasable(request.user, schematic)
+        except AlreadyPurchased as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_409_CONFLICT)
+        except SchematicNotPurchasable as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                'detail': _('پرداخت قبل از فعال‌سازی خرید تکی الزامی است.'),
+                'purpose': 'schematic',
+                'schematic_id': schematic.pk,
+                'amount': schematic.price,
+            },
+            status=status.HTTP_402_PAYMENT_REQUIRED,
+        )
+

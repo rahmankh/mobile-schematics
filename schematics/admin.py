@@ -56,17 +56,19 @@ class SchematicPurchaseAdmin(admin.ModelAdmin):
     """
     Read-mostly ledger of single-copy purchases.
 
-    Unique (user, schematic) is enforced at the database; the admin should not
-    be used to create duplicates.
+    Unique (user, schematic) is enforced at the database. Prefer letting the
+    payment verify() path create rows; manual admin adds are for support only.
     """
 
     list_display = ('user', 'schematic', 'price_paid', 'created_at')
-    list_filter = ('created_at',)
+    list_filter = ('created_at', 'schematic__phone_model__brand', 'schematic__category')
     search_fields = (
         'user__phone_number',
         'user__first_name',
         'user__last_name',
         'schematic__title',
+        'schematic__phone_model__name',
     )
+    date_hierarchy = 'created_at'
     raw_id_fields = ('user', 'schematic')
     readonly_fields = ('created_at',)

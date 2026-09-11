@@ -8,7 +8,7 @@ which is an authenticated, permission-checked streaming endpoint.
 
 from rest_framework import serializers
 
-from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile
+from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 
 
 class BrandSerializer(serializers.ModelSerializer):
@@ -127,3 +127,32 @@ class SchematicFileSerializer(serializers.ModelSerializer):
         model = SchematicFile
         fields = ['id', 'schematic', 'file', 'file_title', 'file_size_bytes', 'created_at']
         read_only_fields = ['id', 'file_size_bytes', 'created_at']
+
+
+class SchematicPurchaseSerializer(serializers.ModelSerializer):
+    """Read-only ledger payload for purchases the authenticated technician already owns."""
+
+    schematic_title = serializers.CharField(source='schematic.title', read_only=True)
+
+    class Meta:
+        model = SchematicPurchase
+        fields = ['id', 'schematic', 'schematic_title', 'price_paid', 'created_at']
+        read_only_fields = fields
+
+
+class SchematicPurchaseCheckoutSerializer(serializers.Serializer):
+    """
+    Input for starting a single-copy checkout.
+
+    `schematic_id` is resolved to a Schematic instance; the view still must not
+    insert SchematicPurchase until payment verify succeeds.
+    """
+
+    schematic_id = serializers.IntegerField()
+
+    def validate_schematic_id(self, value: int) -> Schematic:
+        try:
+            return Schematic.objects.get(pk=value)
+        except Schematic.DoesNotExist as exc:
+            raise serializers.ValidationError('شماتیک مورد نظر یافت نشد.') from exc
+
