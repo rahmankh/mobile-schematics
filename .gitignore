@@ -4,6 +4,10 @@ __pycache__/
 .env
 db.sqlite3
 media/
+protected_media/
 staticfiles/
 .vscode/
 .idea/
+.pytest_cache/
+.coverage
+htmlcov/
