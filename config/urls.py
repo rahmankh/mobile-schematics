@@ -1,22 +1,19 @@
-# config/urls.py
+"""Root URL configuration for the mobile-schematics API."""
 
 from django.contrib import admin
-from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
+from django.urls import include, path
 from django.views.generic import TemplateView
+
+from config.media_views import serve_public_media
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-
-    # صفحه اول بصورت رابط گرافیکی وب
+    # Required by templates/admin/base_site.html language switcher.
+    path('i18n/', include('django.conf.urls.i18n')),
     path('', TemplateView.as_view(template_name='home.html'), name='home'),
-
-    # مسیرهای API
     path('api/v1/accounts/', include('accounts.urls')),
     path('api/v1/schematics/', include('schematics.urls')),
     path('api/v1/subscriptions/', include('subscriptions.urls')),
+    # Public uploads (logos). The view refuses protected_schematics/ and honours SERVE_MEDIA.
+    path('media/<path:path>', serve_public_media, name='public-media'),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
