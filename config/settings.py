@@ -24,6 +24,13 @@ env = environ.Env(
     SECRET_KEY=(str, 'django-insecure-dev-only-change-me'),
     ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1', 'testserver']),
     CSRF_TRUSTED_ORIGINS=(list, []),
+    CORS_ALLOWED_ORIGINS=(list, [
+        'http://localhost:3000',
+        'http://127.0.0.1:3000',
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+    ]),
+    CORS_ALLOW_CREDENTIALS=(bool, True),
     SERVE_MEDIA=(bool, False),
     SECURE_SSL_REDIRECT=(bool, False),
     SESSION_COOKIE_SECURE=(bool, False),
@@ -51,6 +58,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     # Third-party
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     # Local
@@ -63,6 +71,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # CorsMiddleware must sit above CommonMiddleware so preflight OPTIONS are answered.
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -180,6 +190,22 @@ REST_FRAMEWORK = {
 # ---------------------------------------------------------------------------
 # CSRF / proxy / HTTPS hardening (opt-in via env so tests stay on HTTP)
 # ---------------------------------------------------------------------------
+# Browser / Expo-web clients. Native mobile apps do not use CORS; keep this list tight.
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS')
+CORS_ALLOW_CREDENTIALS = env.bool('CORS_ALLOW_CREDENTIALS')
+CORS_ALLOWED_ORIGIN_REGEXES = env.list('CORS_ALLOWED_ORIGIN_REGEXES', default=[])
+CORS_ALLOW_HEADERS = list(
+    {
+        'accept',
+        'authorization',
+        'content-type',
+        'origin',
+        'user-agent',
+        'x-csrftoken',
+        'x-requested-with',
+    }
+)
+
 CSRF_TRUSTED_ORIGINS = env.list(
     'CSRF_TRUSTED_ORIGINS',
     default=[
