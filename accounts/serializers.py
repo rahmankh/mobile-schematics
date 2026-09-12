@@ -186,3 +186,49 @@ class SetPasswordSerializer(serializers.Serializer):
                 {'password_confirm': 'رمزهای عبور وارد شده یکسان نیستند.'}
             )
         return attrs
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Start a reset. Response is always the same so phone existence is not leaked."""
+
+    phone_number = serializers.CharField()
+
+    def validate_phone_number(self, value: str) -> str:
+        try:
+            return normalize_iranian_phone(value)
+        except DRFValidationError as exc:
+            raise serializers.ValidationError(exc.detail) from exc
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Verify the OTP and set a new hashed password. Does not return JWT."""
+
+    phone_number = serializers.CharField()
+    otp = serializers.CharField(write_only=True, max_length=16)
+    password = serializers.CharField(
+        write_only=True,
+        required=True,
+        validators=[validate_password],
+        style={'input_type': 'password'},
+    )
+    password_confirm = serializers.CharField(
+        write_only=True,
+        required=True,
+        style={'input_type': 'password'},
+    )
+
+    def validate_phone_number(self, value: str) -> str:
+        try:
+            return normalize_iranian_phone(value)
+        except DRFValidationError as exc:
+            raise serializers.ValidationError(exc.detail) from exc
+
+    def validate_otp(self, value: str) -> str:
+        return str(value or '').strip()
+
+    def validate(self, attrs: dict) -> dict:
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError(
+                {'password_confirm': 'رمزهای عبور وارد شده یکسان نیستند.'}
+            )
+        return attrs

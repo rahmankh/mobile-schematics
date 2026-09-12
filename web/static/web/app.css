@@ -228,6 +228,14 @@ a.card:hover {
 
 .errorlist { color: var(--danger); padding: 0; list-style: none; font-size: 13px; }
 
+.auth-switch {
+    margin: 16px 0 0;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.auth-switch a { color: var(--accent); }
+
 .hint {
     margin-top: 18px;
     font-size: 13px;

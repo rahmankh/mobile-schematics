@@ -9,14 +9,11 @@ tests and Redis (CACHE_URL) in production.
 from __future__ import annotations
 
 import pytest
-from django.contrib.auth.models import AnonymousUser
 from django.core.cache import cache
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APIRequestFactory
 from rest_framework.throttling import SimpleRateThrottle
 
-from config.throttling import DownloadRateThrottle, LoginRateThrottle, OtpRateThrottle
 from schematics.factories import SchematicFileFactory, UserFactory
 
 
@@ -89,20 +86,16 @@ def test_download_returns_429_after_burst(api_client, tight_throttles):
     assert blocked.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
-def test_otp_throttle_blocks_a_third_anonymous_call(tight_throttles):
-    """
-    SMS OTP is not shipped yet; the throttle class must still be wired so the
-    future view can set `throttle_classes = [OtpRateThrottle]`.
-    """
-    factory = APIRequestFactory()
-    request = factory.post('/api/v1/accounts/otp/')
-    request.user = AnonymousUser()
-    view = type('OtpStubView', (), {})()
-    throttle = OtpRateThrottle()
+@pytest.mark.django_db
+def test_otp_throttle_blocks_a_third_password_reset_call(api_client, tight_throttles):
+    url = reverse('accounts:password-reset')
+    payload = {'phone_number': '09120000000'}
 
-    assert throttle.allow_request(request, view) is True
-    assert throttle.allow_request(request, view) is True
-    assert throttle.allow_request(request, view) is False
+    assert api_client.post(url, payload).status_code != status.HTTP_429_TOO_MANY_REQUESTS
+    assert api_client.post(url, payload).status_code != status.HTTP_429_TOO_MANY_REQUESTS
+    blocked = api_client.post(url, payload)
+
+    assert blocked.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 def test_throttle_rates_are_configured():

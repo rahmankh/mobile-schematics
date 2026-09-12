@@ -1,0 +1,46 @@
+{% extends "web/base.html" %}
+
+{% block title %}ثبت‌نام تکنسین{% endblock %}
+
+{% block content %}
+<div class="login-card">
+    <h1>ایجاد حساب تکنسین</h1>
+    <p class="lede">با شماره موبایل ثبت‌نام کنید. حساب شما تکنسین است و دسترسی ادمین ندارد.</p>
+    <form method="post" action="{% url 'web:register' %}">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        <div class="form-field">
+            <label for="{{ form.phone_number.id_for_label }}">{{ form.phone_number.label }}</label>
+            {{ form.phone_number }}
+            {{ form.phone_number.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label>
+            {{ form.first_name }}
+            {{ form.first_name.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label>
+            {{ form.last_name }}
+            {{ form.last_name.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.repair_shop_name.id_for_label }}">{{ form.repair_shop_name.label }}</label>
+            {{ form.repair_shop_name }}
+            {{ form.repair_shop_name.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.password.id_for_label }}">{{ form.password.label }}</label>
+            {{ form.password }}
+            {{ form.password.errors }}
+        </div>
+        <div class="form-field">
+            <label for="{{ form.password_confirm.id_for_label }}">{{ form.password_confirm.label }}</label>
+            {{ form.password_confirm }}
+            {{ form.password_confirm.errors }}
+        </div>
+        <button class="btn btn-primary" type="submit">ثبت‌نام</button>
+    </form>
+    <p class="auth-switch">حساب دارید؟ <a href="{% url 'web:login' %}">ورود</a></p>
+</div>
+{% endblock %}

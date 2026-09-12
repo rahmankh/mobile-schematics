@@ -7,13 +7,23 @@ from django.contrib.auth import get_user_model
 from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema
 
+from accounts.password_reset import (
+    CONFIRM_SUCCESS_MESSAGE,
+    GENERIC_CONFIRM_ERROR,
+    GENERIC_REQUEST_MESSAGE,
+    InvalidResetError,
+    confirm_password_reset,
+    request_password_reset,
+)
 from accounts.services import issue_jwt_for, public_account_payload
-from config.throttling import LoginRateThrottle
+from config.throttling import LoginRateThrottle, OtpRateThrottle
 from schematics.models import SchematicPurchase
 from subscriptions.models import UserSubscription
 
 from .serializers import (
     CustomTokenObtainPairSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer,
     SetPasswordSerializer,
     TechnicianRegisterSerializer,
     UserProfileSerializer,
@@ -141,3 +151,51 @@ class SetPasswordView(APIView):
             {'detail': 'رمز عبور با موفقیت تنظیم شد. از این پس می‌توانید وارد شوید.'},
             status=status.HTTP_200_OK,
         )
+
+
+class PasswordResetRequestView(APIView):
+    """
+    POST /api/v1/accounts/password-reset/
+
+    Body: {phone_number}. Always 200 with a generic message so callers cannot
+    probe which numbers are registered. OTP is hashed at rest and never returned.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [OtpRateThrottle]
+
+    @extend_schema(tags=['accounts'], request=PasswordResetRequestSerializer, responses={200: None})
+    def post(self, request):
+        serializer = PasswordResetRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request_password_reset(serializer.validated_data['phone_number'])
+        return Response({'detail': GENERIC_REQUEST_MESSAGE}, status=status.HTTP_200_OK)
+
+
+class PasswordResetConfirmView(APIView):
+    """
+    POST /api/v1/accounts/password-reset/confirm/
+
+    Body: {phone_number, otp, password, password_confirm}. Sets a new hashed
+    password and revokes prior JWTs/sessions. Does not auto-login.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [OtpRateThrottle]
+
+    @extend_schema(tags=['accounts'], request=PasswordResetConfirmSerializer, responses={200: None})
+    def post(self, request):
+        serializer = PasswordResetConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            confirm_password_reset(
+                serializer.validated_data['phone_number'],
+                serializer.validated_data['otp'],
+                serializer.validated_data['password'],
+            )
+        except InvalidResetError:
+            return Response(
+                {'detail': GENERIC_CONFIRM_ERROR},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({'detail': CONFIRM_SUCCESS_MESSAGE}, status=status.HTTP_200_OK)

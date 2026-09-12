@@ -233,6 +233,7 @@ class TestJWTRotationAndBlacklist:
 
         assert django_settings.SIMPLE_JWT['ROTATE_REFRESH_TOKENS'] is True
         assert django_settings.SIMPLE_JWT['BLACKLIST_AFTER_ROTATION'] is True
+        assert django_settings.SIMPLE_JWT['CHECK_REVOKE_TOKEN'] is True
         assert django_settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'] == timedelta(minutes=60)
         assert django_settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'] == timedelta(days=7)
         assert 'rest_framework_simplejwt.token_blacklist' in django_settings.INSTALLED_APPS

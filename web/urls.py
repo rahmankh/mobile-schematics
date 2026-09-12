@@ -5,11 +5,14 @@ from django.urls import path
 from .views import (
     BrandDetailView,
     HomeView,
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
     PhoneModelDetailView,
     ProfilePageView,
     SchematicDetailPageView,
     TechnicianLoginView,
     TechnicianLogoutView,
+    TechnicianRegisterView,
 )
 
 app_name = 'web'
@@ -17,6 +20,13 @@ app_name = 'web'
 urlpatterns = [
     path('', HomeView.as_view(), name='home'),
     path('login/', TechnicianLoginView.as_view(), name='login'),
+    path('register/', TechnicianRegisterView.as_view(), name='register'),
+    path('password-reset/', PasswordResetRequestView.as_view(), name='password-reset'),
+    path(
+        'password-reset/confirm/',
+        PasswordResetConfirmView.as_view(),
+        name='password-reset-confirm',
+    ),
     path('logout/', TechnicianLogoutView.as_view(), name='logout'),
     path('profile/', ProfilePageView.as_view(), name='profile'),
     path('brands/<slug:slug>/', BrandDetailView.as_view(), name='brand-detail'),

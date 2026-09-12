@@ -202,7 +202,7 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         # login covers register + token refresh as well (same IP budget).
         'login': '10/minute',
-        # Reserved for SMS OTP views; stricter because each send is billable.
+        # Password-reset request/confirm (SMS-costly). Stricter than login.
         'otp': '5/minute',
         'downloads': '30/minute',
         'guest_checkout': '20/minute',
@@ -216,6 +216,8 @@ SIMPLE_JWT = {
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'UPDATE_LAST_LOGIN': True,
+    'CHECK_REVOKE_TOKEN': True,
+    'REVOKE_TOKEN_CLAIM': 'hash_password',
     'ALGORITHM': 'HS256',
     'SIGNING_KEY': SECRET_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
@@ -239,7 +241,7 @@ SPECTACULAR_SETTINGS = {
     'SCHEMA_PATH_PREFIX': r'/api/v1',
     'COMPONENT_SPLIT_REQUEST': True,
     'TAGS': [
-        {'name': 'accounts', 'description': 'Registration, JWT login, and technician profile.'},
+        {'name': 'accounts', 'description': 'Registration, JWT login, password reset, and technician profile.'},
         {'name': 'schematics', 'description': 'Catalog browse, single-copy checkout, and gated downloads.'},
         {'name': 'subscriptions', 'description': 'Plans and the caller\'s current entitlement.'},
         {'name': 'payments', 'description': 'Gateway request/verify. Content unlocks only after verify.'},
@@ -289,6 +291,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'web:login'
 LOGIN_REDIRECT_URL = 'web:home'
 LOGOUT_REDIRECT_URL = 'web:home'
+
+# Phone OTP password reset (hashed at rest; console/SMS delivery is separate).
+PASSWORD_RESET_OTP_TTL_SECONDS = env.int('PASSWORD_RESET_OTP_TTL_SECONDS', default=600)
+PASSWORD_RESET_OTP_LENGTH = env.int('PASSWORD_RESET_OTP_LENGTH', default=6)
+PASSWORD_RESET_OTP_MAX_ATTEMPTS = env.int('PASSWORD_RESET_OTP_MAX_ATTEMPTS', default=5)
+PASSWORD_RESET_OTP_RESEND_SECONDS = env.int('PASSWORD_RESET_OTP_RESEND_SECONDS', default=60)
 
 # Payment adapters. PAYMENT_GATEWAY=mock is legal only when DEBUG=True (or pytest).
 PAYMENT_GATEWAY = env('PAYMENT_GATEWAY', default='mock')

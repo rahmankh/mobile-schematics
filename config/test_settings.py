@@ -38,6 +38,7 @@ def test_simple_jwt_rotation_and_blacklist_are_enabled():
     jwt = settings.SIMPLE_JWT
     assert jwt['ROTATE_REFRESH_TOKENS'] is True
     assert jwt['BLACKLIST_AFTER_ROTATION'] is True
+    assert jwt['CHECK_REVOKE_TOKEN'] is True
     assert 'rest_framework_simplejwt.token_blacklist' in settings.INSTALLED_APPS
 
 

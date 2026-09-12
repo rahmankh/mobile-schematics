@@ -43,6 +43,7 @@
     <span class="pill paid">نیاز به اشتراک یا خرید</span>
     {% else %}
     <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای دانلود وارد شوید</a>
+    <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
     {% endif %}
 </div>
 {% empty %}

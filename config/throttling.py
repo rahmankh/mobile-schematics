@@ -18,9 +18,8 @@ class LoginRateThrottle(AnonRateThrottle):
 
 class OtpRateThrottle(AnonRateThrottle):
     """
-    IP cap for SMS OTP request/verify.
+    IP cap for password-reset request/confirm (and future SMS OTP).
 
-    Attach with `throttle_classes = [OtpRateThrottle]` when the OTP views land.
     The rate is stricter than login because each send costs a third-party SMS.
     """
 

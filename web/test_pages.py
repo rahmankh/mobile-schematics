@@ -30,6 +30,8 @@ class TestCatalogPages:
         assert 'ورود' in html
         assert 'خروج' not in html
         assert reverse('web:login') in html
+        assert reverse('web:register') in html
+        assert 'ثبت‌نام' in html
 
     def test_home_shows_sample_models_and_categories(self, client):
         brand = BrandFactory(name='Samsung', slug='samsung')
@@ -86,6 +88,7 @@ class TestCatalogPages:
 
         assert schematic_file.file_title in html
         assert 'برای دانلود وارد شوید' in html
+        assert reverse('web:register') in html
 
     def test_login_then_logout_roundtrip(self, client):
         user = UserFactory(password='Password123!')
@@ -103,6 +106,53 @@ class TestCatalogPages:
         assert logout_response.status_code == 302
         guest_home = client.get(reverse('web:home')).content.decode('utf-8')
         assert 'ورود' in guest_home
+        assert reverse('web:register') in guest_home
+
+    def test_register_page_is_linked_from_login(self, client):
+        html = client.get(reverse('web:login')).content.decode('utf-8')
+        assert reverse('web:register') in html
+        assert 'ثبت‌نام تکنسین' in html
+        assert reverse('web:password-reset') in html
+        assert 'رمز عبور را فراموش کرده‌اید؟' in html
+
+    def test_technician_can_register_from_html_and_is_logged_in(self, client):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        response = client.post(
+            reverse('web:register'),
+            {
+                'phone_number': '+989123000888',
+                'first_name': 'Nima',
+                'last_name': 'Rezaei',
+                'repair_shop_name': 'Tabriz Shop',
+                'password': 'StrongPassword@123',
+                'password_confirm': 'StrongPassword@123',
+                'role': 'admin',
+                'is_staff': True,
+            },
+        )
+        assert response.status_code == 302
+        user = User.objects.get(phone_number='09123000888')
+        assert user.role == User.RoleChoices.TECHNICIAN
+        assert user.is_staff is False
+        assert user.check_password('StrongPassword@123')
+        home = client.get(reverse('web:home'))
+        assert user.phone_number in home.content.decode('utf-8')
+        assert 'خروج' in home.content.decode('utf-8')
+
+    def test_register_rejects_duplicate_phone(self, client):
+        UserFactory(phone_number='09123000889', password='StrongPassword@123')
+        response = client.post(
+            reverse('web:register'),
+            {
+                'phone_number': '09123000889',
+                'password': 'StrongPassword@123',
+                'password_confirm': 'StrongPassword@123',
+            },
+        )
+        assert response.status_code == 200
+        assert 'قبلاً ثبت‌نام' in response.content.decode('utf-8')
 
     def test_profile_requires_login(self, client):
         response = client.get(reverse('web:profile'))
@@ -119,3 +169,81 @@ class TestCatalogPages:
         assert 'Sara' in html
         assert 'Isfahan Lab' in html
         assert user.phone_number in html
+
+
+@pytest.mark.django_db
+class TestPasswordResetPages:
+    def test_request_page_is_reachable(self, client):
+        html = client.get(reverse('web:password-reset')).content.decode('utf-8')
+        assert 'بازیابی رمز عبور' in html
+        assert reverse('web:login') in html
+
+    def test_unknown_phone_still_reaches_confirm(self, client):
+        response = client.post(
+            reverse('web:password-reset'),
+            {'phone_number': '09123000780'},
+        )
+        assert response.status_code == 302
+        assert reverse('web:password-reset-confirm') in response.url
+        follow = client.get(response.url)
+        assert follow.status_code == 200
+        assert 'اگر این شماره حساب داشته باشد' in follow.content.decode('utf-8')
+
+    def test_technician_can_reset_password_from_html(self, client, monkeypatch):
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+        monkeypatch.setattr('accounts.password_reset.generate_otp', lambda: '847291')
+        user = UserFactory(phone_number='09123000781', password='StrongPassword@123')
+
+        request_response = client.post(
+            reverse('web:password-reset'),
+            {'phone_number': '09123000781'},
+        )
+        assert request_response.status_code == 302
+
+        confirm = client.post(
+            reverse('web:password-reset-confirm'),
+            {
+                'phone_number': '09123000781',
+                'otp': '847291',
+                'password': 'BrandNewPass@456',
+                'password_confirm': 'BrandNewPass@456',
+            },
+        )
+        assert confirm.status_code == 302
+        assert reverse('web:login') in confirm.url
+        user.refresh_from_db()
+        assert user.check_password('BrandNewPass@456')
+        assert user.check_password('StrongPassword@123') is False
+
+        login_old = client.post(
+            reverse('web:login'),
+            {'username': '09123000781', 'password': 'StrongPassword@123'},
+        )
+        assert login_old.status_code == 200
+        login_new = client.post(
+            reverse('web:login'),
+            {'username': '09123000781', 'password': 'BrandNewPass@456'},
+        )
+        assert login_new.status_code == 302
+        home = client.get(reverse('web:home')).content.decode('utf-8')
+        assert 'خروج' in home
+        assert User.objects.get(phone_number='09123000781').phone_number in home
+
+    def test_wrong_otp_stays_on_confirm(self, client, monkeypatch):
+        monkeypatch.setattr('accounts.password_reset.generate_otp', lambda: '847291')
+        UserFactory(phone_number='09123000782', password='StrongPassword@123')
+        client.post(reverse('web:password-reset'), {'phone_number': '09123000782'})
+        response = client.post(
+            reverse('web:password-reset-confirm'),
+            {
+                'phone_number': '09123000782',
+                'otp': '000000',
+                'password': 'BrandNewPass@456',
+                'password_confirm': 'BrandNewPass@456',
+            },
+        )
+        assert response.status_code == 200
+        assert 'کد بازیابی نامعتبر یا منقضی است' in response.content.decode('utf-8')
+

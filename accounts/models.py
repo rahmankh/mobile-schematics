@@ -5,6 +5,7 @@ Login identifier is `phone_number` (Iranian 09xxxxxxxxx), not email/username.
 `role` is a product-level flag; staff access still uses `is_staff` / `is_superuser`.
 """
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.db import models
 from django.utils import timezone
@@ -88,3 +89,37 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def is_guest(self) -> bool:
         """True when checkout created the row and no login password has been set."""
         return not self.has_usable_password()
+
+
+class PasswordResetChallenge(models.Model):
+    """
+    One hashed, time-limited OTP for a password reset.
+
+    The plaintext code is delivered once (SMS later; console while DEBUG) and
+    never stored. Guests cannot receive a challenge — reset must not turn an
+    unusable-password checkout row into a takeover.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='password_reset_challenges',
+    )
+    phone_number = models.CharField(max_length=15, db_index=True)
+    otp_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField(db_index=True)
+    attempt_count = models.PositiveSmallIntegerField(default=0)
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ('-created_at',)
+        indexes = [
+            models.Index(fields=('phone_number', 'used_at', 'expires_at')),
+        ]
+        verbose_name = _('Password reset challenge')
+        verbose_name_plural = _('Password reset challenges')
+
+    def __str__(self) -> str:
+        state = 'used' if self.used_at else 'open'
+        return f'{self.phone_number} ({state})'
