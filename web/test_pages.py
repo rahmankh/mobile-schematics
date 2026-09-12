@@ -115,6 +115,27 @@ class TestCatalogPages:
         assert reverse('web:password-reset') in html
         assert 'رمز عبور را فراموش کرده‌اید؟' in html
 
+    def test_login_and_register_headers_offer_home_instead_of_auth_buttons(self, client):
+        login_url = reverse('web:login')
+        register_url = reverse('web:register')
+        home_url = reverse('web:home')
+        header_login = f'class="btn btn-ghost" href="{login_url}">ورود</a>'
+        header_register = f'class="btn btn-primary" href="{register_url}">ثبت‌نام</a>'
+
+        login_html = client.get(login_url).content.decode('utf-8')
+        assert 'بازگشت به صفحه اصلی' in login_html
+        assert f'href="{home_url}"' in login_html
+        assert header_login not in login_html
+        assert header_register not in login_html
+        assert 'ثبت‌نام تکنسین' in login_html
+
+        register_html = client.get(register_url).content.decode('utf-8')
+        assert 'بازگشت به صفحه اصلی' in register_html
+        assert f'href="{home_url}"' in register_html
+        assert header_login not in register_html
+        assert header_register not in register_html
+        assert 'حساب دارید؟' in register_html
+
     def test_technician_can_register_from_html_and_is_logged_in(self, client):
         from django.contrib.auth import get_user_model
 
@@ -177,6 +198,9 @@ class TestPasswordResetPages:
         html = client.get(reverse('web:password-reset')).content.decode('utf-8')
         assert 'بازیابی رمز عبور' in html
         assert reverse('web:login') in html
+        assert 'بازگشت به صفحه اصلی' in html
+        assert 'class="btn btn-ghost" href="{0}">ورود</a>'.format(reverse('web:login')) not in html
+        assert 'class="btn btn-primary" href="{0}">ثبت‌نام</a>'.format(reverse('web:register')) not in html
 
     def test_unknown_phone_still_reaches_confirm(self, client):
         response = client.post(

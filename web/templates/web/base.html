@@ -29,6 +29,8 @@
                     {% csrf_token %}
                     <button type="submit" class="btn btn-ghost">خروج</button>
                 </form>
+            {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'register' or request.resolver_match.url_name == 'password-reset' or request.resolver_match.url_name == 'password-reset-confirm' %}
+                <a class="btn btn-ghost" href="{% url 'web:home' %}">بازگشت به صفحه اصلی</a>
             {% else %}
                 <a class="btn btn-ghost" href="{% url 'web:login' %}">ورود</a>
                 <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
