@@ -36,5 +36,5 @@ def test_database_engine_is_configured():
 
 def test_env_example_documents_required_production_keys():
     example = (Path(settings.BASE_DIR) / '.env.example').read_text(encoding='utf-8')
-    for key in ('SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'DATABASE_URL'):
+    for key in ('SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'DATABASE_URL', 'DJANGO_ENV', 'PAYMENT_GATEWAY'):
         assert key in example

@@ -12,15 +12,18 @@ from pathlib import Path
 import environ
 from django.utils.translation import gettext_lazy as _
 
+from config.security import maybe_enforce_fail_closed
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ---------------------------------------------------------------------------
 # Environment
 # ---------------------------------------------------------------------------
-# Defaults are safe for tests/CI (DEBUG off, SQLite, no SSL redirect).
-# Production MUST set SECRET_KEY, DEBUG=False, ALLOWED_HOSTS, and DATABASE_URL.
+# Defaults are for local DEBUG / pytest only. config.security refuses to boot
+# when DEBUG=False (or DJANGO_ENV=production) still uses these placeholders.
 env = environ.Env(
     DEBUG=(bool, False),
+    DJANGO_ENV=(str, 'development'),
     SECRET_KEY=(str, 'django-insecure-dev-only-change-me'),
     ALLOWED_HOSTS=(list, ['localhost', '127.0.0.1', 'testserver']),
     CSRF_TRUSTED_ORIGINS=(list, []),
@@ -45,6 +48,7 @@ if _env_file.exists():
 
 SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG')
+DJANGO_ENV = env('DJANGO_ENV')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS')
 
 # ---------------------------------------------------------------------------
@@ -267,7 +271,7 @@ LOGIN_URL = 'web:login'
 LOGIN_REDIRECT_URL = 'web:home'
 LOGOUT_REDIRECT_URL = 'web:home'
 
-# Payment adapters. Keep PAYMENT_GATEWAY=mock until Zarinpal/IDPay keys exist.
+# Payment adapters. PAYMENT_GATEWAY=mock is legal only when DEBUG=True (or pytest).
 PAYMENT_GATEWAY = env('PAYMENT_GATEWAY', default='mock')
 PAYMENT_CALLBACK_URL = env('PAYMENT_CALLBACK_URL', default='')
 PAYMENT_START_URL_TEMPLATE = env(
@@ -277,3 +281,12 @@ PAYMENT_START_URL_TEMPLATE = env(
 PAYMENT_MOCK_SUCCESS = env.bool('PAYMENT_MOCK_SUCCESS', default=True)
 PAYMENT_ZARINPAL_MERCHANT_ID = env('PAYMENT_ZARINPAL_MERCHANT_ID', default='')
 PAYMENT_IDPAY_API_KEY = env('PAYMENT_IDPAY_API_KEY', default='')
+
+# Refuse insecure production boots (skipped under pytest — see config.security).
+maybe_enforce_fail_closed(
+    debug=DEBUG,
+    secret_key=SECRET_KEY,
+    payment_gateway=PAYMENT_GATEWAY,
+    database_engine=DATABASES['default']['ENGINE'],
+    django_env=DJANGO_ENV,
+)

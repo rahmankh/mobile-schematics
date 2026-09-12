@@ -133,7 +133,14 @@ _REGISTRY = {
 
 def get_gateway() -> PaymentGateway:
     """Instantiate the adapter named in settings.PAYMENT_GATEWAY (default mock)."""
+    from config.security import mock_gateway_allowed
+
     name = getattr(settings, 'PAYMENT_GATEWAY', 'mock')
+    if name == 'mock' and not mock_gateway_allowed(debug=bool(getattr(settings, 'DEBUG', False))):
+        raise ImproperlyConfigured(
+            'PAYMENT_GATEWAY=mock is not allowed when DEBUG=False. '
+            'Use a live adapter or enable DEBUG for local development.'
+        )
     try:
         return _REGISTRY[name]()
     except KeyError as exc:
