@@ -7,6 +7,7 @@ Never commit a real SECRET_KEY. Copy `.env.example` to `.env` for local work.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 import environ
@@ -65,6 +66,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     # Local
     'accounts',
@@ -208,6 +210,23 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=env.int('JWT_ACCESS_MINUTES', default=60)),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=env.int('JWT_REFRESH_DAYS', default=7)),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+}
+
 # OpenAPI 3 schema + Swagger UI at /api/docs/ (schema JSON/YAML at /api/schema/).
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Mobile Schematics API',
@@ -289,4 +308,6 @@ maybe_enforce_fail_closed(
     payment_gateway=PAYMENT_GATEWAY,
     database_engine=DATABASES['default']['ENGINE'],
     django_env=DJANGO_ENV,
+    zarinpal_merchant_id=PAYMENT_ZARINPAL_MERCHANT_ID,
+    idpay_api_key=PAYMENT_IDPAY_API_KEY,
 )

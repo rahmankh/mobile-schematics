@@ -23,6 +23,7 @@ def test_openapi_schema_is_version_3_and_lists_core_paths(api_client):
 
     paths = payload['paths']
     assert '/api/v1/accounts/login/' in paths
+    assert '/api/v1/accounts/logout/' in paths
     assert '/api/v1/schematics/brands/' in paths
     assert '/api/v1/schematics/' in paths
     assert '/api/v1/schematics/files/{id}/download/' in paths or any(

@@ -34,6 +34,13 @@ def test_database_engine_is_configured():
     assert 'sqlite3' in engine or 'postgresql' in engine
 
 
+def test_simple_jwt_rotation_and_blacklist_are_enabled():
+    jwt = settings.SIMPLE_JWT
+    assert jwt['ROTATE_REFRESH_TOKENS'] is True
+    assert jwt['BLACKLIST_AFTER_ROTATION'] is True
+    assert 'rest_framework_simplejwt.token_blacklist' in settings.INSTALLED_APPS
+
+
 def test_env_example_documents_required_production_keys():
     example = (Path(settings.BASE_DIR) / '.env.example').read_text(encoding='utf-8')
     for key in ('SECRET_KEY', 'DEBUG', 'ALLOWED_HOSTS', 'DATABASE_URL', 'DJANGO_ENV', 'PAYMENT_GATEWAY'):

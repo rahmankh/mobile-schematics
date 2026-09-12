@@ -29,6 +29,11 @@ _SQLITE_ENGINE_MARKERS = (
     'django.db.backends.sqlite3',
 )
 
+# Live adapter names whose HTTP clients are not implemented yet. Remove a name
+# from this set when request_payment/verify_payment actually talk to the PSP.
+UNIMPLEMENTED_LIVE_GATEWAYS = frozenset({'zarinpal', 'idpay'})
+LIVE_GATEWAY_NAMES = frozenset({'zarinpal', 'idpay'})
+
 
 def running_under_pytest() -> bool:
     """True when this process is a pytest or Django test runner invocation."""
@@ -76,10 +81,13 @@ def validate_runtime_settings(
     payment_gateway: str | None,
     database_engine: str | None,
     django_env: str = 'development',
+    zarinpal_merchant_id: str = '',
+    idpay_api_key: str = '',
+    unimplemented_live_gateways: frozenset[str] | None = None,
 ) -> None:
     """
     Raise ImproperlyConfigured when this process looks like production and is
-    still using placeholder secrets, the mock gateway, or SQLite.
+    still using placeholder secrets, the mock gateway, SQLite, or an unwired PSP.
     """
     env_name = (django_env or 'development').strip().lower()
     production_shaped = (not debug) or env_name == 'production'
@@ -107,6 +115,31 @@ def validate_runtime_settings(
             'Set DATABASE_URL to PostgreSQL (or another production engine).'
         )
 
+    if gateway not in LIVE_GATEWAY_NAMES:
+        raise ImproperlyConfigured(
+            f'Unknown PAYMENT_GATEWAY={gateway!r}. Use zarinpal or idpay in production.'
+        )
+
+    stubs = (
+        UNIMPLEMENTED_LIVE_GATEWAYS
+        if unimplemented_live_gateways is None
+        else unimplemented_live_gateways
+    )
+    if gateway in stubs:
+        raise ImproperlyConfigured(
+            f'PAYMENT_GATEWAY={gateway} is still a stub and cannot take live charges. '
+            'Wire the adapter before DEBUG=False / DJANGO_ENV=production.'
+        )
+
+    if gateway == 'zarinpal' and not str(zarinpal_merchant_id or '').strip():
+        raise ImproperlyConfigured(
+            'PAYMENT_ZARINPAL_MERCHANT_ID is required when PAYMENT_GATEWAY=zarinpal.'
+        )
+    if gateway == 'idpay' and not str(idpay_api_key or '').strip():
+        raise ImproperlyConfigured(
+            'PAYMENT_IDPAY_API_KEY is required when PAYMENT_GATEWAY=idpay.'
+        )
+
 
 def maybe_enforce_fail_closed(
     *,
@@ -115,6 +148,8 @@ def maybe_enforce_fail_closed(
     payment_gateway: str | None,
     database_engine: str | None,
     django_env: str = 'development',
+    zarinpal_merchant_id: str = '',
+    idpay_api_key: str = '',
 ) -> None:
     """Settings-load hook. No-op under pytest so the suite can use dev defaults."""
     if running_under_pytest():
@@ -125,6 +160,8 @@ def maybe_enforce_fail_closed(
         payment_gateway=payment_gateway,
         database_engine=database_engine,
         django_env=django_env,
+        zarinpal_merchant_id=zarinpal_merchant_id,
+        idpay_api_key=idpay_api_key,
     )
 
 
@@ -141,4 +178,6 @@ def enforce_fail_closed_from_django_settings() -> None:
         payment_gateway=getattr(django_settings, 'PAYMENT_GATEWAY', 'mock'),
         database_engine=engine,
         django_env=getattr(django_settings, 'DJANGO_ENV', 'development'),
+        zarinpal_merchant_id=getattr(django_settings, 'PAYMENT_ZARINPAL_MERCHANT_ID', ''),
+        idpay_api_key=getattr(django_settings, 'PAYMENT_IDPAY_API_KEY', ''),
     )

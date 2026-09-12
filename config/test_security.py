@@ -108,14 +108,49 @@ def test_django_env_production_refuses_mock_and_insecure_secret():
         )
 
 
-def test_debug_false_with_hardened_values_is_allowed():
+def test_debug_false_with_hardened_live_gateway_is_allowed():
     validate_runtime_settings(
         debug=False,
         secret_key=SECURE_SECRET,
         payment_gateway='zarinpal',
         database_engine=POSTGRES,
         django_env='production',
+        zarinpal_merchant_id='00000000-0000-0000-0000-000000000000',
+        unimplemented_live_gateways=frozenset(),
     )
+
+
+def test_debug_false_refuses_unwired_zarinpal_stub():
+    with pytest.raises(ImproperlyConfigured, match='stub'):
+        validate_runtime_settings(
+            debug=False,
+            secret_key=SECURE_SECRET,
+            payment_gateway='zarinpal',
+            database_engine=POSTGRES,
+            zarinpal_merchant_id='00000000-0000-0000-0000-000000000000',
+        )
+
+
+def test_debug_false_wired_zarinpal_requires_merchant_id():
+    with pytest.raises(ImproperlyConfigured, match='PAYMENT_ZARINPAL_MERCHANT_ID'):
+        validate_runtime_settings(
+            debug=False,
+            secret_key=SECURE_SECRET,
+            payment_gateway='zarinpal',
+            database_engine=POSTGRES,
+            unimplemented_live_gateways=frozenset(),
+        )
+
+
+def test_debug_false_wired_idpay_requires_api_key():
+    with pytest.raises(ImproperlyConfigured, match='PAYMENT_IDPAY_API_KEY'):
+        validate_runtime_settings(
+            debug=False,
+            secret_key=SECURE_SECRET,
+            payment_gateway='idpay',
+            database_engine=POSTGRES,
+            unimplemented_live_gateways=frozenset(),
+        )
 
 
 def test_maybe_enforce_is_a_noop_under_pytest():
@@ -156,3 +191,17 @@ def test_get_gateway_refuses_mock_when_not_a_test_process(monkeypatch):
     monkeypatch.setattr('config.security.running_under_pytest', lambda: False)
     with pytest.raises(ImproperlyConfigured, match='PAYMENT_GATEWAY=mock'):
         get_gateway()
+
+
+@override_settings(DEBUG=False, PAYMENT_GATEWAY='zarinpal', PAYMENT_ZARINPAL_MERCHANT_ID='acct-1')
+def test_get_gateway_refuses_zarinpal_stub_outside_tests(monkeypatch):
+    monkeypatch.setattr('config.security.running_under_pytest', lambda: False)
+    with pytest.raises(ImproperlyConfigured, match='stub'):
+        get_gateway()
+
+
+@override_settings(DEBUG=True, PAYMENT_GATEWAY='zarinpal')
+def test_get_gateway_allows_zarinpal_stub_in_debug():
+    from payments.gateways import ZarinpalGateway
+
+    assert isinstance(get_gateway(), ZarinpalGateway)

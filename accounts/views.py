@@ -2,7 +2,7 @@ from rest_framework import generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 from django.contrib.auth import get_user_model
 from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema
@@ -62,10 +62,26 @@ class CustomLoginView(TokenObtainPairView):
 
 
 class CustomTokenRefreshView(TokenRefreshView):
-    """Rotate access tokens. Shares the login IP budget to slow token stuffing."""
+    """Rotate refresh tokens and blacklist the previous jti. Shares the login IP budget."""
 
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
+
+
+class LogoutView(TokenBlacklistView):
+    """
+    POST /api/v1/accounts/logout/
+
+    Body: {refresh: <token>}. Blacklists that refresh jti so it cannot mint
+    another access token. Access tokens already issued expire on their own TTL.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    @extend_schema(tags=['accounts'])
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
 
 
 class ProfileView(generics.RetrieveUpdateAPIView):

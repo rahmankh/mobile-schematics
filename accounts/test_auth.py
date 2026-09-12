@@ -118,6 +118,8 @@ class TestTechnicianAuthFlow:
         )
         assert refresh.status_code == status.HTTP_200_OK
         assert refresh.data['access']
+        assert refresh.data['refresh']
+        assert refresh.data['refresh'] != response.data['refresh']
         AccessToken(refresh.data['access'])
 
     def test_inactive_technician_cannot_login(self, api_client):
@@ -220,3 +222,80 @@ class TestSetPassword:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         user.refresh_from_db()
         assert user.check_password('StrongPassword@123')
+
+
+@pytest.mark.django_db
+class TestJWTRotationAndBlacklist:
+    def test_settings_enable_rotation_and_blacklist(self):
+        from datetime import timedelta
+
+        from django.conf import settings as django_settings
+
+        assert django_settings.SIMPLE_JWT['ROTATE_REFRESH_TOKENS'] is True
+        assert django_settings.SIMPLE_JWT['BLACKLIST_AFTER_ROTATION'] is True
+        assert django_settings.SIMPLE_JWT['ACCESS_TOKEN_LIFETIME'] == timedelta(minutes=60)
+        assert django_settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'] == timedelta(days=7)
+        assert 'rest_framework_simplejwt.token_blacklist' in django_settings.INSTALLED_APPS
+
+    def test_refresh_rotates_and_blacklists_previous_token(self, api_client):
+        UserFactory(phone_number='09123000920', password='StrongPassword@123')
+        login = api_client.post(
+            reverse('accounts:login'),
+            {'phone_number': '09123000920', 'password': 'StrongPassword@123'},
+        )
+        old_refresh = login.data['refresh']
+
+        rotated = api_client.post(
+            reverse('accounts:token_refresh'),
+            {'refresh': old_refresh},
+            format='json',
+        )
+        assert rotated.status_code == status.HTTP_200_OK
+        assert rotated.data['refresh'] != old_refresh
+
+        reused = api_client.post(
+            reverse('accounts:token_refresh'),
+            {'refresh': old_refresh},
+            format='json',
+        )
+        assert reused.status_code == status.HTTP_401_UNAUTHORIZED
+
+        follow_up = api_client.post(
+            reverse('accounts:token_refresh'),
+            {'refresh': rotated.data['refresh']},
+            format='json',
+        )
+        assert follow_up.status_code == status.HTTP_200_OK
+        assert follow_up.data['access']
+
+    def test_logout_blacklists_refresh_token(self, api_client):
+        user = UserFactory(phone_number='09123000921', password='StrongPassword@123')
+        login = api_client.post(
+            reverse('accounts:login'),
+            {'phone_number': '09123000921', 'password': 'StrongPassword@123'},
+        )
+        assert login.status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.last_login is not None
+
+        logout = api_client.post(
+            reverse('accounts:logout'),
+            {'refresh': login.data['refresh']},
+            format='json',
+        )
+        assert logout.status_code == status.HTTP_200_OK
+
+        refresh = api_client.post(
+            reverse('accounts:token_refresh'),
+            {'refresh': login.data['refresh']},
+            format='json',
+        )
+        assert refresh.status_code == status.HTTP_401_UNAUTHORIZED
+
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
+        profile = api_client.get(reverse('accounts:profile'))
+        assert profile.status_code == status.HTTP_200_OK
+
+    def test_logout_without_refresh_is_rejected(self, api_client):
+        response = api_client.post(reverse('accounts:logout'), {}, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
