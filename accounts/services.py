@@ -31,7 +31,19 @@ def get_or_create_checkout_user(phone_number: str):
         return User.objects.get(phone_number=phone_number), False
 
 
+def public_account_payload(user) -> dict:
+    """Safe identity body for register/login. Never includes password, role, or staff flags."""
+    return {
+        'id': user.id,
+        'phone_number': user.phone_number,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'repair_shop_name': getattr(user, 'repair_shop_name', ''),
+        'is_guest': user.is_guest,
+    }
+
+
 def issue_jwt_for(user) -> dict[str, str]:
-    """Access + refresh pair used after guest payment verify."""
+    """Signed access + refresh pair (SimpleJWT HMAC). Used after register and guest claim."""
     refresh = RefreshToken.for_user(user)
     return {'refresh': str(refresh), 'access': str(refresh.access_token)}

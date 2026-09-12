@@ -7,12 +7,128 @@ from __future__ import annotations
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import identify_hasher
 from django.urls import reverse
 from rest_framework import status
+from rest_framework_simplejwt.tokens import AccessToken
 
 from schematics.factories import UserFactory
 
 User = get_user_model()
+
+REGISTER_PAYLOAD = {
+    'phone_number': '09123000901',
+    'first_name': 'Sara',
+    'last_name': 'Karimi',
+    'repair_shop_name': 'Shiraz Repair',
+    'password': 'StrongPassword@123',
+    'password_confirm': 'StrongPassword@123',
+}
+
+
+@pytest.mark.django_db
+class TestTechnicianAuthFlow:
+    """End-to-end register → hashed password → JWT → profile for a non-admin technician."""
+
+    def test_register_hashes_password_issues_jwt_and_opens_profile(self, api_client):
+        response = api_client.post(reverse('accounts:register'), REGISTER_PAYLOAD)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert 'password' not in response.data
+        assert 'password' not in response.data.get('user', {})
+        assert response.data['user']['phone_number'] == '09123000901'
+        assert response.data['user']['is_guest'] is False
+        assert 'access' in response.data
+        assert 'refresh' in response.data
+
+        user = User.objects.get(phone_number='09123000901')
+        assert user.check_password('StrongPassword@123')
+        assert user.password != 'StrongPassword@123'
+        identify_hasher(user.password)
+        assert user.role == User.RoleChoices.TECHNICIAN
+        assert user.is_staff is False
+        assert user.is_superuser is False
+        assert user.is_active is True
+
+        token = AccessToken(response.data['access'])
+        assert int(token['user_id']) == user.pk
+
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {response.data["access"]}')
+        profile = api_client.get(reverse('accounts:profile'))
+        assert profile.status_code == status.HTTP_200_OK
+        assert profile.data['phone_number'] == '09123000901'
+        assert profile.data['repair_shop_name'] == 'Shiraz Repair'
+        assert profile.data['is_guest'] is False
+
+    def test_register_ignores_privilege_fields(self, api_client):
+        payload = {
+            **REGISTER_PAYLOAD,
+            'phone_number': '09123000902',
+            'role': User.RoleChoices.ADMIN,
+            'is_staff': True,
+            'is_superuser': True,
+            'is_active': False,
+        }
+        response = api_client.post(reverse('accounts:register'), payload)
+
+        assert response.status_code == status.HTTP_201_CREATED
+        user = User.objects.get(phone_number='09123000902')
+        assert user.role == User.RoleChoices.TECHNICIAN
+        assert user.is_staff is False
+        assert user.is_superuser is False
+        assert user.is_active is True
+
+    def test_register_rejects_weak_password(self, api_client):
+        payload = {
+            **REGISTER_PAYLOAD,
+            'phone_number': '09123000903',
+            'password': 'password',
+            'password_confirm': 'password',
+        }
+        response = api_client.post(reverse('accounts:register'), payload)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert User.objects.filter(phone_number='09123000903').exists() is False
+
+    def test_login_issues_jwt_that_authenticates_profile(self, api_client):
+        UserFactory(
+            phone_number='09123000904',
+            password='StrongPassword@123',
+            first_name='Ali',
+            repair_shop_name='Tehran Shop',
+        )
+        response = api_client.post(
+            reverse('accounts:login'),
+            {'phone_number': '09123000904', 'password': 'StrongPassword@123'},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data['user']['phone_number'] == '09123000904'
+        assert response.data['user']['is_guest'] is False
+        token = AccessToken(response.data['access'])
+        user = User.objects.get(phone_number='09123000904')
+        assert int(token['user_id']) == user.pk
+
+        api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {response.data["access"]}')
+        profile = api_client.get(reverse('accounts:profile'))
+        assert profile.status_code == status.HTTP_200_OK
+        assert profile.data['repair_shop_name'] == 'Tehran Shop'
+
+        refresh = api_client.post(
+            reverse('accounts:token_refresh'),
+            {'refresh': response.data['refresh']},
+        )
+        assert refresh.status_code == status.HTTP_200_OK
+        assert refresh.data['access']
+        AccessToken(refresh.data['access'])
+
+    def test_inactive_technician_cannot_login(self, api_client):
+        user = UserFactory(phone_number='09123000905', password='StrongPassword@123')
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        response = api_client.post(
+            reverse('accounts:login'),
+            {'phone_number': '09123000905', 'password': 'StrongPassword@123'},
+        )
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 @pytest.mark.django_db

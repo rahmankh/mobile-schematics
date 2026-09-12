@@ -5,6 +5,7 @@ Authenticated profile/status dashboard: identity, active plan, and owned schemat
 from __future__ import annotations
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
 
@@ -13,6 +14,8 @@ from schematics.factories import (
     UserFactory,
     UserSubscriptionFactory,
 )
+
+User = get_user_model()
 
 
 @pytest.mark.django_db
@@ -58,9 +61,7 @@ class TestProfileDashboard:
         assert response.data['purchase_count'] == 0
 
     def test_guest_profile_flags_is_guest(self, api_client):
-        from django.contrib.auth import get_user_model
-
-        user = get_user_model().objects.create_user(phone_number='09125550002', password=None)
+        user = User.objects.create_user(phone_number='09125550002', password=None)
         api_client.force_authenticate(user=user)
 
         response = api_client.get(reverse('accounts:profile'))
@@ -68,3 +69,34 @@ class TestProfileDashboard:
         assert response.status_code == status.HTTP_200_OK
         assert response.data['is_guest'] is True
         assert response.data['phone_number'] == '09125550002'
+
+    def test_technician_can_update_profile_fields_but_not_privileges(self, api_client):
+        user = UserFactory(
+            phone_number='09125550003',
+            first_name='Reza',
+            last_name='Nouri',
+            repair_shop_name='Old Shop',
+        )
+        api_client.force_authenticate(user=user)
+
+        response = api_client.patch(
+            reverse('accounts:profile'),
+            {
+                'first_name': 'Reza',
+                'last_name': 'Nouri',
+                'repair_shop_name': 'Shiraz Phone Service',
+                'phone_number': '09129999999',
+                'role': 'admin',
+                'is_staff': True,
+            },
+            format='json',
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        user.refresh_from_db()
+        assert user.repair_shop_name == 'Shiraz Phone Service'
+        assert user.phone_number == '09125550003'
+        assert user.role == User.RoleChoices.TECHNICIAN
+        assert user.is_staff is False
+        assert response.data['repair_shop_name'] == 'Shiraz Phone Service'
+        assert response.data['phone_number'] == '09125550003'

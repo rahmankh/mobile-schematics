@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Prefetch
 from drf_spectacular.utils import extend_schema
 
+from accounts.services import issue_jwt_for, public_account_payload
 from config.throttling import LoginRateThrottle
 from schematics.models import SchematicPurchase
 from subscriptions.models import UserSubscription
@@ -23,29 +24,28 @@ User = get_user_model()
 
 class RegisterView(generics.CreateAPIView):
     """
-    ثبت‌نام تکنسین جدید
+    POST /api/v1/accounts/register/
+
+    Creates a regular technician (never staff/admin), hashes the password, and
+    returns a signed JWT pair so the client can hit profile without a second login.
     """
+
     queryset = User.objects.all()
     serializer_class = TechnicianRegisterSerializer
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
 
+    @extend_schema(tags=['accounts'])
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        return Response(
-            {
-                "message": "ثبت‌نام با موفقیت انجام شد.",
-                "user": {
-                    "id": user.id,
-                    "phone_number": user.phone_number,
-                    "first_name": user.first_name,
-                    "last_name": user.last_name,
-                }
-            },
-            status=status.HTTP_201_CREATED
-        )
+        payload = {
+            'message': 'ثبت‌نام با موفقیت انجام شد.',
+            'user': public_account_payload(user),
+        }
+        payload.update(issue_jwt_for(user))
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class CustomLoginView(TokenObtainPairView):

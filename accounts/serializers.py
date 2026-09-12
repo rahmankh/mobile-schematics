@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError
 from drf_spectacular.utils import extend_schema_field
 
 from accounts.phone import normalize_iranian_phone
+from accounts.services import public_account_payload
 from schematics.serializers import SchematicPurchaseSerializer
 from subscriptions.serializers import UserSubscriptionSerializer
 
@@ -55,7 +56,24 @@ class TechnicianRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data: dict):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
-        return User.objects.create_user(password=password, **validated_data)
+        # Privilege fields are not in Meta.fields; strip them anyway so a future
+        # serializer change cannot turn public register into an admin factory.
+        for privileged in (
+            'role',
+            'is_staff',
+            'is_superuser',
+            'is_active',
+            'groups',
+            'user_permissions',
+        ):
+            validated_data.pop(privileged, None)
+        return User.objects.create_user(
+            password=password,
+            role=User.RoleChoices.TECHNICIAN,
+            is_staff=False,
+            is_superuser=False,
+            **validated_data,
+        )
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -68,14 +86,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         except DRFValidationError as exc:
             raise serializers.ValidationError({self.username_field: exc.detail}) from exc
         data = super().validate(attrs)
-        data['user'] = {
-            'id': self.user.id,
-            'phone_number': self.user.phone_number,
-            'first_name': self.user.first_name,
-            'last_name': self.user.last_name,
-            'repair_shop_name': getattr(self.user, 'repair_shop_name', ''),
-            'is_guest': self.user.is_guest,
-        }
+        data['user'] = public_account_payload(self.user)
         return data
 
 
