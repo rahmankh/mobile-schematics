@@ -17,7 +17,8 @@ def get_or_create_checkout_user(phone_number: str):
 
     Existing accounts (registered or previous guests) are reused so a paid
     schematic lands on the phone the customer typed. New rows get an unusable
-    password — they receive JWT after verify, not a guessed credential.
+    password — they claim a session after verify via the checkout claim token,
+    not a guessed credential.
     """
     try:
         return User.objects.get(phone_number=phone_number), False

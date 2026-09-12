@@ -14,12 +14,13 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.reverse import reverse
 
-from accounts.services import get_or_create_checkout_user, issue_jwt_for
+from accounts.services import get_or_create_checkout_user, issue_jwt_for, public_account_payload
 from schematics.models import Schematic
 from schematics.services import AlreadyPurchased, SchematicNotPurchasable, assert_schematic_purchasable, fulfill_schematic_purchase
 from subscriptions.models import Plan
 from subscriptions.services import fulfill_subscription
 
+from .claims import claim_token_matches, generate_claim_token, hash_claim_token
 from .gateways import get_gateway
 from .models import PaymentTransaction
 
@@ -32,7 +33,20 @@ class PaymentConflict(PaymentError):
     """Mapped to HTTP 409 (already owned, etc.)."""
 
 
-def create_payment_request(*, user, purpose: str, schematic_id=None, plan_id=None, request=None) -> tuple[PaymentTransaction, str]:
+class PaymentClaimDenied(PaymentError):
+    """Mapped to HTTP 403 (wrong/unusable guest claim)."""
+
+
+def create_payment_request(
+    *,
+    user,
+    purpose: str,
+    schematic_id=None,
+    plan_id=None,
+    request=None,
+    claim_token_hash: str = '',
+    guest_account_created: bool = False,
+) -> tuple[PaymentTransaction, str]:
     """
     Validate the cart, ask the gateway for an authority, then store PENDING.
 
@@ -89,6 +103,8 @@ def create_payment_request(*, user, purpose: str, schematic_id=None, plan_id=Non
         schematic=schematic,
         plan=plan,
         description=description,
+        claim_token_hash=claim_token_hash,
+        guest_account_created=guest_account_created,
     ), issued.payment_url
 
 
@@ -102,9 +118,11 @@ def start_guest_schematic_checkout(
     Guest single-copy checkout: phone + schematic, no password.
 
     The schematic is validated *before* creating a user so a typo or a free
-    document cannot spawn an empty guest account. Returns
-    (txn, payment_url, account_status) where account_status is one of
-    created / existing_guest / existing_registered.
+    document cannot spawn an empty guest account.
+
+    Returns (txn, payment_url, claim_token). The plaintext claim_token is
+    returned once to the caller that started checkout and is stored only as
+    HMAC. GET /verify/ never sees it and must not mint JWT.
     """
     try:
         schematic = Schematic.objects.get(pk=schematic_id)
@@ -114,37 +132,55 @@ def start_guest_schematic_checkout(
         raise PaymentError('این شماتیک برای خرید تکی در دسترس نیست.')
 
     user, created = get_or_create_checkout_user(phone_number)
-    if created:
-        account_status = 'created'
-    elif user.is_guest:
-        account_status = 'existing_guest'
-    else:
-        account_status = 'existing_registered'
-
+    raw_claim = generate_claim_token()
     txn, payment_url = create_payment_request(
         user=user,
         purpose=PaymentTransaction.Purpose.SCHEMATIC,
         schematic_id=schematic.pk,
         request=request,
+        claim_token_hash=hash_claim_token(raw_claim),
+        guest_account_created=created,
     )
-    return txn, payment_url, account_status
+    return txn, payment_url, raw_claim
 
 
-def verify_access_payload(user) -> dict:
+def claim_guest_session(*, authority: str, claim_token: str) -> dict:
     """
-    Extra keys for GET /payments/verify/.
+    Issue JWT only when the caller proves the checkout-bound claim token.
 
-    Guests (no login password) receive JWT so they can download immediately.
-    Registered technicians must sign in — issuing JWT here would let anyone who
-    knows a phone number hijack that account by paying for a cheap schematic.
+    Conditions (all required):
+    - transaction is PAID
+    - HMAC matches
+    - this checkout created the user (not a pre-existing guest/registered row)
+    - the user still has no login password
     """
+    try:
+        txn = PaymentTransaction.objects.select_related('user').get(authority=authority)
+    except PaymentTransaction.DoesNotExist as exc:
+        raise PaymentError('تراکنش پرداخت یافت نشد.') from exc
+
+    if txn.status != PaymentTransaction.Status.PAID:
+        raise PaymentError('پرداخت هنوز تایید نشده است.')
+
+    user = txn.user
+    allowed = (
+        claim_token_matches(txn.claim_token_hash, claim_token)
+        and txn.guest_account_created
+        and user.is_guest
+    )
+    if not allowed:
+        raise PaymentClaimDenied('امکان صدور نشست برای این تراکنش وجود ندارد.')
+
+    if txn.claimed_at is None:
+        txn.claimed_at = timezone.now()
+        txn.save(update_fields=['claimed_at'])
+
     payload = {
-        'is_guest': user.is_guest,
-        'login_required': not user.is_guest,
-        'phone_number': user.phone_number,
+        'user': public_account_payload(user),
+        'paid': True,
+        'detail': 'نشست با موفقیت صادر شد.',
     }
-    if user.is_guest:
-        payload.update(issue_jwt_for(user))
+    payload.update(issue_jwt_for(user))
     return payload
 
 

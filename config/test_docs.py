@@ -29,6 +29,7 @@ def test_openapi_schema_is_version_3_and_lists_core_paths(api_client):
         'download' in path for path in paths
     )
     assert any(path.endswith('/payments/request/') for path in paths)
+    assert any(path.endswith('/payments/claim/') for path in paths)
 
 
 @pytest.mark.django_db

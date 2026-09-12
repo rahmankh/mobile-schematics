@@ -65,6 +65,12 @@ class PaymentTransaction(models.Model):
     description = models.CharField(_('توضیح'), max_length=255, blank=True)
     verified_at = models.DateTimeField(_('زمان تایید'), null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    # HMAC of the one-time guest claim token. Empty for authenticated checkouts.
+    claim_token_hash = models.CharField(max_length=64, blank=True, default='')
+    # True only when this checkout created the user row. Existing guests must not
+    # receive a session from a later payment on their phone number.
+    guest_account_created = models.BooleanField(default=False)
+    claimed_at = models.DateTimeField(_('زمان صدور نشست مهمان'), null=True, blank=True)
 
     class Meta:
         ordering = ['-created_at']

@@ -16,15 +16,17 @@ from config.throttling import GuestCheckoutRateThrottle
 from .models import PaymentTransaction
 from .serializers import (
     GuestCheckoutSerializer,
+    GuestClaimSerializer,
     PaymentRequestSerializer,
     PaymentTransactionSerializer,
 )
 from .services import (
+    PaymentClaimDenied,
     PaymentConflict,
     PaymentError,
+    claim_guest_session,
     create_payment_request,
     start_guest_schematic_checkout,
-    verify_access_payload,
     verify_and_fulfill,
 )
 
@@ -70,8 +72,9 @@ class GuestCheckoutView(APIView):
     """
     POST /api/v1/payments/guest/
 
-    Body: {phone_number, schematic_id}. Creates/reuses the account for that
-    mobile number and starts a PENDING schematic payment. No password required.
+    Body: {phone_number, schematic_id}. Starts a PENDING schematic payment.
+    Returns payment_url, authority, and a one-time claim_token. Does not
+    report whether the phone already has an account.
     """
 
     permission_classes = [AllowAny]
@@ -86,7 +89,7 @@ class GuestCheckoutView(APIView):
         serializer = GuestCheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            txn, payment_url, account_status = start_guest_schematic_checkout(
+            txn, payment_url, claim_token = start_guest_schematic_checkout(
                 phone_number=serializer.validated_data['phone_number'],
                 schematic_id=serializer.validated_data['schematic_id'],
                 request=request,
@@ -98,7 +101,7 @@ class GuestCheckoutView(APIView):
 
         payload = PaymentTransactionSerializer(txn).data
         payload['payment_url'] = payment_url
-        payload['account_status'] = account_status
+        payload['claim_token'] = claim_token
         payload['detail'] = 'به درگاه پرداخت هدایت شوید.'
         return Response(payload, status=status.HTTP_201_CREATED)
 
@@ -107,8 +110,8 @@ class PaymentVerifyView(APIView):
     """
     GET /api/v1/payments/verify/?Authority=...&Status=OK
 
-    Zarinpal-style query params. Authority is the capability token, so this
-    endpoint is AllowAny. Failed or canceled payments never call fulfill().
+    Gateway callback. Authority proves the payment, not the account.
+    This endpoint fulfills entitlements and never mints JWT.
     """
 
     permission_classes = [AllowAny]
@@ -138,6 +141,31 @@ class PaymentVerifyView(APIView):
         payload = PaymentTransactionSerializer(txn).data
         payload['paid'] = txn.status == PaymentTransaction.Status.PAID
         payload['detail'] = 'پرداخت با موفقیت تایید شد.' if payload['paid'] else 'پرداخت تایید نشد.'
-        if payload['paid']:
-            payload.update(verify_access_payload(txn.user))
+        return Response(payload, status=status.HTTP_200_OK)
+
+
+class PaymentClaimView(APIView):
+    """
+    POST /api/v1/payments/claim/
+
+    Body: {authority, claim_token}. Issues JWT only when the token HMAC-matches
+    a PAID transaction that created this guest account. Verify never mints JWT.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [GuestCheckoutRateThrottle]
+
+    @extend_schema(tags=['payments'], request=GuestClaimSerializer)
+    def post(self, request):
+        serializer = GuestClaimSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            payload = claim_guest_session(
+                authority=serializer.validated_data['authority'],
+                claim_token=serializer.validated_data['claim_token'],
+            )
+        except PaymentClaimDenied as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except PaymentError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(payload, status=status.HTTP_200_OK)

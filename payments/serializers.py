@@ -64,3 +64,10 @@ class GuestCheckoutSerializer(serializers.Serializer):
         except DRFValidationError as exc:
             raise serializers.ValidationError(exc.detail) from exc
 
+
+class GuestClaimSerializer(serializers.Serializer):
+    """Prove possession of the checkout-bound claim token after verify()."""
+
+    authority = serializers.CharField()
+    claim_token = serializers.CharField()
+

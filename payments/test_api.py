@@ -59,6 +59,7 @@ class TestPaymentRequestAPI:
         assert response.data['authority']
         assert response.data['payment_url']
         assert int(response.data['amount']) == 180000
+        assert 'claim_token' not in response.data
         txn = PaymentTransaction.objects.get(authority=response.data['authority'])
         assert txn.status == PaymentTransaction.Status.PENDING
         assert txn.user_id == user.id
@@ -166,6 +167,8 @@ class TestPaymentVerifyAPI:
 
         assert response.status_code == status.HTTP_200_OK
         assert response.data['paid'] is True
+        assert 'access' not in response.data
+        assert 'refresh' not in response.data
         assert SchematicPurchase.objects.filter(user=user, schematic=schematic).exists()
         schematic.refresh_from_db()
         # user_can_download needs an authenticated user object
