@@ -5,7 +5,7 @@
 {% block content %}
 <div class="login-card">
     <h1>ورود به حساب</h1>
-    <p class="lede">با شماره موبایل و رمز عبور وارد شوید تا پروفایل و دانلود برایتان فعال شود.</p>
+    <p class="lede">با شماره موبایل و رمز عبور وارد شوید تا پروفایل و مشاهده نقشه برایتان فعال شود.</p>
     <form method="post" action="{% url 'web:login' %}">
         {% csrf_token %}
         {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}

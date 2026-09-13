@@ -1,4 +1,5 @@
 {% extends "web/base.html" %}
+{% load static %}
 
 {% block title %}{{ schematic.title }}{% endblock %}
 
@@ -27,15 +28,30 @@
 <p class="lede">{{ schematic.description }}</p>
 {% endif %}
 
-<h2 class="section-title">فایل‌ها</h2>
+<h2 class="section-title">نمایشگر فایل</h2>
 {% for file in schematic.files.all %}
-<div class="file-row">
+<div class="file-row file-row-viewer">
     <div>
         <strong>{{ file.file_title }}</strong>
-        <div class="meta">{{ file.file_size_bytes|filesizeformat }}</div>
+        <div class="meta">{{ file.file_size_bytes|filesizeformat }} · نمایش درون‌برنامه‌ای</div>
     </div>
-    {% if can_download %}
-    <a class="btn btn-primary" href="{% url 'schematics:schematic-file-download' file.pk %}">دانلود</a>
+    {% if can_view %}
+    <div
+        class="schematic-viewer"
+        data-view-url="{% url 'schematics:schematic-file-view' file.pk %}"
+        data-viewer-kind="{{ file.viewer_kind }}"
+        data-title="{{ file.file_title }}"
+    >
+        <div class="schematic-viewer-chrome">
+            <span>نمایشگر نقشه</span>
+            <span class="meta">دانلود فایل خام غیرفعال است</span>
+        </div>
+        <div class="schematic-viewer-stage">
+            <div class="schematic-viewer-watermark" aria-hidden="true">{{ viewer_watermark }}</div>
+            <div class="schematic-viewer-canvas-host"></div>
+            <p class="schematic-viewer-status">در حال بارگذاری نمایشگر…</p>
+        </div>
+    </div>
     {% elif user.is_authenticated %}
     <div class="file-actions">
         <form method="post" action="{% url 'web:schematic-checkout' schematic.pk %}">
@@ -53,7 +69,7 @@
     </div>
     {% else %}
     <div class="file-actions">
-        <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای دانلود وارد شوید</a>
+        <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای مشاهده وارد شوید</a>
         <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
     </div>
     {% endif %}
@@ -61,4 +77,11 @@
 {% empty %}
 <div class="empty">فایلی برای این شماتیک ثبت نشده است.</div>
 {% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+{% if can_view %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="{% static 'web/viewer.js' %}?v=view-1"></script>
+{% endif %}
 {% endblock %}

@@ -22,7 +22,7 @@ def denied_download_payload(user, schematic) -> tuple[dict, int]:
     if not authenticated:
         return {
             'detail': (
-                'برای دانلود این فایل باید وارد حساب شوید '
+                'برای مشاهده این فایل باید وارد حساب شوید '
                 'یا خرید مهمان با شماره موبایل انجام دهید.'
             ),
             'code': 'login_required',
@@ -32,7 +32,7 @@ def denied_download_payload(user, schematic) -> tuple[dict, int]:
 
     return {
         'detail': (
-            'برای دانلود این فایل باید نقشه را به صورت تکی خریداری کنید '
+            'برای مشاهده این فایل باید نقشه را به صورت تکی خریداری کنید '
             'یا از موجودی کیف پول پرداخت نمایید.'
         ),
         'code': 'purchase_required',

@@ -226,10 +226,16 @@ class TestGuestCheckoutVerifyAndClaim:
 
         api_client.credentials(HTTP_AUTHORIZATION=f'Bearer {claimed.data["access"]}')
         schematic_file = SchematicFileFactory(schematic=schematic)
-        download = api_client.get(
+        view = api_client.get(
+            reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        )
+        assert view.status_code == status.HTTP_200_OK
+        assert 'inline' in view['Content-Disposition']
+        locked = api_client.get(
             reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         )
-        assert download.status_code == status.HTTP_200_OK
+        assert locked.status_code == status.HTTP_403_FORBIDDEN
+        assert locked.data['code'] == 'view_only'
 
         set_password = api_client.post(
             reverse('accounts:set-password'),

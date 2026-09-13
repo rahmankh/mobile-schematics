@@ -2,8 +2,8 @@
 REST serializers for the schematics catalog.
 
 Public list/detail payloads never include a raw filesystem or MEDIA path.
-File downloads are exposed only as a reverse() of `schematics:schematic-file-download`,
-which is an authenticated, permission-checked streaming endpoint.
+File viewing is exposed as a reverse() of `schematics:schematic-file-view`.
+`download_url` remains in the contract but 403s for regular entitled users.
 """
 
 from rest_framework import serializers
@@ -48,19 +48,32 @@ class SchematicFileListSerializer(serializers.ModelSerializer):
     """
     Public file metadata for schematic detail.
 
-    `download_url` MUST reverse `schematics:schematic-file-download` (the name
-    declared in schematics/urls.py). A mismatched view_name raises NoReverseMatch
-    and 500s the entire detail endpoint.
+    `view_url` MUST reverse `schematics:schematic-file-view`. `download_url`
+    still reverses the staff-only attachment route so existing clients do not
+    500; regular users receive 403 `view_only` there.
     """
 
+    view_url = serializers.HyperlinkedIdentityField(
+        view_name='schematics:schematic-file-view',
+        lookup_field='pk',
+    )
     download_url = serializers.HyperlinkedIdentityField(
         view_name='schematics:schematic-file-download',
         lookup_field='pk',
     )
+    viewer_kind = serializers.CharField(read_only=True)
 
     class Meta:
         model = SchematicFile
-        fields = ['id', 'file_title', 'file_size_bytes', 'download_url', 'created_at']
+        fields = [
+            'id',
+            'file_title',
+            'file_size_bytes',
+            'viewer_kind',
+            'view_url',
+            'download_url',
+            'created_at',
+        ]
         # Intentionally omit `file` — FileField would call storage.url() or expose a MEDIA path.
 
 

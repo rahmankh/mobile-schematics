@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.utils import timezone
 from datetime import timedelta
@@ -108,6 +109,7 @@ class TestSchematicDownloadAccessMatrix:
         schematic = SchematicFactory(is_free=False, requires_subscription=True)
         SchematicPurchaseFactory(user=user, schematic=schematic)
         assert schematic.user_can_download(user) is True
+        assert schematic.user_can_view(user) is True
 
     def test_staff_can_download_paid_schematic(self):
         staff = UserFactory(is_staff=True)
@@ -125,3 +127,15 @@ class TestSchematicDownloadAccessMatrix:
     def test_file_size_is_cached_on_save(self):
         schematic_file = SchematicFileFactory()
         assert schematic_file.file_size_bytes > 0
+
+    def test_viewer_kind_follows_file_extension(self):
+        pdf = SchematicFileFactory()
+        assert pdf.viewer_kind == 'pdf'
+        image = SchematicFileFactory(
+            file=SimpleUploadedFile('board.png', b'\x89PNG\r\n\x1a\n', content_type='image/png'),
+        )
+        assert image.viewer_kind == 'image'
+        archive = SchematicFileFactory(
+            file=SimpleUploadedFile('pages.zip', b'PK\x03\x04', content_type='application/zip'),
+        )
+        assert archive.viewer_kind == 'other'

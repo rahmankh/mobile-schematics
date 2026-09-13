@@ -54,7 +54,7 @@ class ProtectedSchematicStorage(FileSystemStorage):
         """
         Block accidental public URL generation.
 
-        Callers must reverse `schematics:schematic-file-download` instead.
+        Clients must reverse `schematics:schematic-file-view` instead.
         """
         raise ValueError(
             "Protected schematic files are not publicly addressable. "

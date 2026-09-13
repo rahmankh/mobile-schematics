@@ -541,6 +541,11 @@ a.card:hover {
     border-bottom: 1px solid var(--line);
 }
 
+.file-row-viewer {
+    flex-direction: column;
+    align-items: stretch;
+}
+
 .file-actions {
     display: flex;
     flex-wrap: wrap;
@@ -549,6 +554,84 @@ a.card:hover {
 }
 
 .file-actions form { margin: 0; }
+
+.schematic-viewer {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #070b14;
+}
+
+.schematic-viewer-chrome {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+}
+
+.schematic-viewer-stage {
+    position: relative;
+    min-height: 280px;
+    max-height: min(80vh, 920px);
+    overflow: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.schematic-viewer-canvas-host {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+}
+
+.schematic-viewer-canvas-host canvas,
+.schematic-viewer-canvas-host img {
+    max-width: 100%;
+    height: auto;
+    pointer-events: none;
+    background: #111827;
+}
+
+.schematic-viewer-watermark {
+    position: absolute;
+    inset: -30%;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 48px 72px;
+    align-content: space-around;
+    justify-content: space-around;
+    opacity: 0.2;
+    color: #f8fbff;
+    font-weight: 700;
+    font-size: 13px;
+    transform: rotate(-22deg);
+    user-select: none;
+}
+
+.schematic-viewer-status {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    padding: 0 14px 14px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.schematic-viewer-status:empty {
+    display: none;
+    padding: 0;
+}
 
 .profile-card { margin: 0; max-width: 560px; }
 

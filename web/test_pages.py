@@ -83,15 +83,21 @@ class TestCatalogPages:
         assert response.status_code == 200
         assert 'S24 Ultra Main Board' in response.content.decode('utf-8')
 
-    def test_schematic_page_asks_guests_to_log_in_for_download(self, client):
+    def test_schematic_page_asks_guests_to_log_in_for_viewer(self, client):
         schematic_file = SchematicFileFactory(file_title='Board PDF')
         url = reverse('web:schematic-detail', kwargs={'pk': schematic_file.schematic.pk})
 
         html = client.get(url).content.decode('utf-8')
 
         assert schematic_file.file_title in html
-        assert 'برای دانلود وارد شوید' in html
+        assert 'برای مشاهده وارد شوید' in html
         assert reverse('web:register') in html
+        assert reverse(
+            'schematics:schematic-file-download', kwargs={'pk': schematic_file.pk}
+        ) not in html
+        assert reverse(
+            'schematics:schematic-file-view', kwargs={'pk': schematic_file.pk}
+        ) not in html
 
     def test_login_then_logout_roundtrip(self, client):
         user = UserFactory(password='Password123!')
@@ -271,7 +277,18 @@ class TestCatalogPages:
         user.refresh_from_db()
         assert user.wallet_balance == 50000
         bought = client.get(reverse('web:schematic-detail', kwargs={'pk': schematic.pk}))
-        assert 'دانلود' in bought.content.decode('utf-8')
+        html = bought.content.decode('utf-8')
+        schematic_file = schematic.files.first()
+        assert reverse(
+            'schematics:schematic-file-view', kwargs={'pk': schematic_file.pk}
+        ) in html
+        assert reverse(
+            'schematics:schematic-file-download', kwargs={'pk': schematic_file.pk}
+        ) not in html
+        assert 'schematic-viewer' in html
+        assert 'دانلود فایل خام غیرفعال است' in html
+        assert 'viewer.js' in html
+        assert user.phone_number in html
 
 
 @pytest.mark.django_db

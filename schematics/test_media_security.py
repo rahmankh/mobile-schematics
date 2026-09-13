@@ -66,6 +66,12 @@ class TestProtectedMediaIsolation:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
+def _stream_body(response) -> bytes:
+    if getattr(response, 'streaming', False):
+        return b''.join(response.streaming_content)
+    return response.content
+
+
 @pytest.mark.django_db
 class TestDownloadEndpointPermissions:
     def test_anonymous_receives_401_or_403(self, api_client):
@@ -100,22 +106,37 @@ class TestDownloadEndpointPermissions:
         response = api_client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_purchaser_can_download_without_subscription(self, api_client):
+    def test_purchaser_cannot_raw_download_even_after_purchase(self, api_client):
         user = UserFactory()
         schematic_file = SchematicFileFactory()
         SchematicPurchaseFactory(user=user, schematic=schematic_file.schematic)
         api_client.force_authenticate(user=user)
         url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         response = api_client.get(url)
-        assert response.status_code == status.HTTP_200_OK
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['code'] == 'view_only'
+        assert response.data['view_url'].endswith(
+            reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        )
 
-    def test_free_schematic_downloadable_without_subscription(self, api_client):
+    def test_free_schematic_is_also_view_only_for_regular_users(self, api_client):
         user = UserFactory()
         schematic_file = SchematicFileFactory(schematic__is_free=True)
         api_client.force_authenticate(user=user)
         url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         response = api_client.get(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['code'] == 'view_only'
+
+    def test_staff_can_still_raw_download(self, api_client):
+        staff = UserFactory(is_staff=True)
+        schematic_file = SchematicFileFactory()
+        api_client.force_authenticate(user=staff)
+        url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
+        response = api_client.get(url)
         assert response.status_code == status.HTTP_200_OK
+        assert 'attachment' in response['Content-Disposition']
+        assert MINIMAL_PDF_BYTES[:8] in _stream_body(response)
 
     def test_unknown_file_id_returns_404(self, api_client):
         user = UserFactory()
@@ -123,3 +144,45 @@ class TestDownloadEndpointPermissions:
         url = reverse('schematics:schematic-file-download', kwargs={'pk': 999_999})
         response = api_client.get(url)
         assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+class TestViewStreamEndpoint:
+    def test_anonymous_cannot_load_viewer_stream(self, api_client):
+        schematic_file = SchematicFileFactory()
+        url = reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.data['code'] == 'login_required'
+
+    def test_unentitled_user_cannot_load_viewer_stream(self, api_client):
+        user = UserFactory()
+        schematic_file = SchematicFileFactory()
+        api_client.force_authenticate(user=user)
+        url = reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+        assert response.data['code'] == 'purchase_required'
+
+    def test_purchaser_loads_inline_viewer_payload(self, api_client):
+        user = UserFactory()
+        schematic_file = SchematicFileFactory()
+        SchematicPurchaseFactory(user=user, schematic=schematic_file.schematic)
+        api_client.force_authenticate(user=user)
+        url = reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert 'inline' in response['Content-Disposition']
+        assert 'attachment' not in response['Content-Disposition']
+        assert 'no-store' in response['Cache-Control']
+        assert '/media/' not in response['Content-Disposition']
+        assert _stream_body(response).startswith(b'%PDF')
+
+    def test_free_schematic_viewer_stream_for_authenticated_user(self, api_client):
+        user = UserFactory()
+        schematic_file = SchematicFileFactory(schematic__is_free=True)
+        api_client.force_authenticate(user=user)
+        url = reverse('schematics:schematic-file-view', kwargs={'pk': schematic_file.pk})
+        response = api_client.get(url)
+        assert response.status_code == status.HTTP_200_OK
+        assert 'inline' in response['Content-Disposition']

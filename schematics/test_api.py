@@ -37,13 +37,20 @@ class TestSchematicDetailAPI:
         assert len(response.data['files']) == 1
 
         file_payload = response.data['files'][0]
-        expected_path = reverse(
+        expected_download = reverse(
             'schematics:schematic-file-download',
             kwargs={'pk': schematic_file.pk},
         )
-        assert file_payload['download_url'].endswith(expected_path)
+        expected_view = reverse(
+            'schematics:schematic-file-view',
+            kwargs={'pk': schematic_file.pk},
+        )
+        assert file_payload['download_url'].endswith(expected_download)
+        assert file_payload['view_url'].endswith(expected_view)
+        assert file_payload['viewer_kind'] == 'pdf'
         # Paid binaries must not be advertised as a public /media/ URL.
         assert '/media/' not in file_payload['download_url']
+        assert '/media/' not in file_payload['view_url']
         assert 'file' not in file_payload
 
     def test_detail_increments_view_count_atomically(self, api_client):

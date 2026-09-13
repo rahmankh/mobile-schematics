@@ -150,7 +150,7 @@ class PhoneModelDetailView(TemplateView):
 
 
 class SchematicDetailPageView(DetailView):
-    """Readable schematic page (notes + file list). Download still goes through the gated API."""
+    """Readable schematic page. Entitled users get the in-browser viewer, not a raw download."""
 
     model = Schematic
     template_name = 'web/schematic_detail.html'
@@ -166,12 +166,18 @@ class SchematicDetailPageView(DetailView):
         context = super().get_context_data(**kwargs)
         schematic = context['schematic']
         user = self.request.user
-        can_download = schematic.user_can_download(user) if user.is_authenticated else False
+        can_view = schematic.user_can_view(user) if user.is_authenticated else False
         wallet_balance = getattr(user, 'wallet_balance', 0) if user.is_authenticated else 0
-        context['can_download'] = can_download
+        context['can_view'] = can_view
+        context['can_download'] = False
+        context['viewer_watermark'] = ''
+        if user.is_authenticated:
+            context['viewer_watermark'] = ' · '.join(
+                part for part in (user.get_full_name(), user.phone_number) if part
+            )
         context['can_wallet_pay'] = (
             user.is_authenticated
-            and not can_download
+            and not can_view
             and not schematic.is_free
             and schematic.price > 0
             and wallet_balance >= schematic.price

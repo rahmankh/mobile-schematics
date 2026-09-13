@@ -1,26 +1,27 @@
 """
-Catalog and gated-download HTTP endpoints for schematics.
+Catalog and gated-stream HTTP endpoints for schematics.
 
-Download is the only path that streams bytes. List/detail are public reads;
-entitlement is enforced when the client hits SchematicFileDownloadView.
+List/detail are public reads. Bytes are streamed only from
+SchematicFileViewStreamView (inline, view-only). Raw attachment download is
+staff-only; entitled regular users receive a view_only JSON payload instead.
 """
 
 from __future__ import annotations
 
-import os
-
 from django.db.models import Count, F
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.utils.translation import gettext_lazy as _
 from rest_framework import filters, generics, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.reverse import reverse as api_reverse
 from rest_framework.views import APIView
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 
 from config.throttling import DownloadRateThrottle
 from .access import denied_download_payload
+from .streaming import stream_schematic_file
 
 from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 from .serializers import (
@@ -175,11 +176,69 @@ class SchematicDetailView(generics.RetrieveAPIView):
         return obj
 
 
+def _get_schematic_file_or_404(pk) -> SchematicFile:
+    try:
+        return SchematicFile.objects.select_related(
+            'schematic',
+            'schematic__phone_model__brand',
+        ).get(pk=pk)
+    except SchematicFile.DoesNotExist as exc:
+        raise Http404(_('فایل مورد نظر یافت نشد.')) from exc
+
+
+def _deny_or_none(request, schematic_file):
+    if schematic_file.schematic.user_can_view(request.user):
+        return None
+    payload, http_status = denied_download_payload(request.user, schematic_file.schematic)
+    return Response(payload, status=http_status)
+
+
+def _view_only_payload(request, schematic_file) -> dict:
+    view_url = api_reverse(
+        'schematics:schematic-file-view',
+        kwargs={'pk': schematic_file.pk},
+        request=request,
+    )
+    return {
+        'detail': _('دانلود فایل خام غیرفعال است. از نمایشگر درون‌برنامه‌ای استفاده کنید.'),
+        'code': 'view_only',
+        'view_url': view_url,
+    }
+
+
 @extend_schema(
     tags=['schematics'],
     responses={
-        200: OpenApiResponse(description='Binary file (Content-Disposition: attachment).'),
+        200: OpenApiResponse(description='Binary file (Content-Disposition: inline).'),
+        401: OpenApiResponse(description='Caller must sign in.'),
         403: OpenApiResponse(description='Caller is not entitled to this schematic.'),
+        404: OpenApiResponse(description='File row or bytes are missing.'),
+    },
+)
+class SchematicFileViewStreamView(APIView):
+    """
+    GET /api/v1/schematics/files/<id>/view/
+
+    Inline stream for the in-browser viewer. Same entitlement matrix as
+    user_can_view. Never advertises a public MEDIA path.
+    """
+
+    permission_classes = [AllowAny]
+    throttle_classes = [DownloadRateThrottle]
+
+    def get(self, request, pk, *args, **kwargs):
+        schematic_file = _get_schematic_file_or_404(pk)
+        denied = _deny_or_none(request, schematic_file)
+        if denied is not None:
+            return denied
+        return stream_schematic_file(schematic_file, as_attachment=False)
+
+
+@extend_schema(
+    tags=['schematics'],
+    responses={
+        200: OpenApiResponse(description='Staff-only raw attachment stream.'),
+        403: OpenApiResponse(description='View-only for entitled users, or purchase required.'),
         404: OpenApiResponse(description='File row or bytes are missing.'),
     },
 )
@@ -187,51 +246,25 @@ class SchematicFileDownloadView(APIView):
     """
     GET /api/v1/schematics/files/<id>/download/
 
-    Streams the binary from ProtectedSchematicStorage after Schematic.user_can_download
-    succeeds. Anonymous callers get 401 with `code=login_required` (Persian copy +
-    guest-checkout hint) instead of DRF's default English 403/401.
+    Raw attachment download is locked for regular users (even after purchase).
+    Staff and superusers may still fetch an attachment. Everyone else who is
+    entitled receives 403 `view_only` pointing at the inline viewer stream.
     """
 
     permission_classes = [AllowAny]
     throttle_classes = [DownloadRateThrottle]
 
     def get(self, request, pk, *args, **kwargs):
-        try:
-            schematic_file = SchematicFile.objects.select_related(
-                'schematic',
-                'schematic__phone_model__brand',
-            ).get(pk=pk)
-        except SchematicFile.DoesNotExist as exc:
-            raise Http404(_('فایل مورد نظر یافت نشد.')) from exc
+        schematic_file = _get_schematic_file_or_404(pk)
+        denied = _deny_or_none(request, schematic_file)
+        if denied is not None:
+            return denied
 
-        if not schematic_file.schematic.user_can_download(request.user):
-            payload, http_status = denied_download_payload(
-                request.user,
-                schematic_file.schematic,
-            )
-            return Response(payload, status=http_status)
+        user = request.user
+        if getattr(user, 'is_staff', False) or getattr(user, 'is_superuser', False):
+            return stream_schematic_file(schematic_file, as_attachment=True)
 
-        if not schematic_file.file:
-            return Response(
-                {'detail': _('فایل فیزیکی روی سرور موجود نیست.')},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        try:
-            # Storage-agnostic open: works for ProtectedSchematicStorage and test tmp dirs.
-            file_handle = schematic_file.file.open('rb')
-        except (FileNotFoundError, OSError, ValueError):
-            return Response(
-                {'detail': _('فایل فیزیکی روی سرور موجود نیست.')},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        filename = os.path.basename(schematic_file.file.name)
-        return FileResponse(
-            file_handle,
-            as_attachment=True,
-            filename=filename,
-        )
+        return Response(_view_only_payload(request, schematic_file), status=status.HTTP_403_FORBIDDEN)
 
 
 @extend_schema_view(

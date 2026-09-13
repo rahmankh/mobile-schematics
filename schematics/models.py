@@ -239,13 +239,18 @@ class Schematic(models.Model):
 
         return self.purchases.filter(user=user).exists()
 
+    def user_can_view(self, user) -> bool:
+        """Same entitlement as streaming; HTML/API viewers call this name."""
+        return self.user_can_download(user)
+
 
 class SchematicFile(models.Model):
     """
     One downloadable binary attached to a schematic (PDF boardview, ZIP of pages, ...).
 
     The FileField uses ProtectedSchematicStorage: `.url` is not a public MEDIA path.
-    Clients must call SchematicFileDownloadView, which enforces `user_can_download`.
+    Entitled clients stream via SchematicFileViewStreamView (inline). Raw download
+    is staff-only.
     """
 
     schematic = models.ForeignKey(
@@ -276,6 +281,16 @@ class SchematicFile(models.Model):
 
     def __str__(self) -> str:
         return f'{self.file_title} ({self.schematic.title})'
+
+    @property
+    def viewer_kind(self) -> str:
+        """pdf | image | other — drives the HTML/canvas viewer, not storage."""
+        name = (getattr(self.file, 'name', '') or '').lower()
+        if name.endswith('.pdf'):
+            return 'pdf'
+        if name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+            return 'image'
+        return 'other'
 
     def save(self, *args, **kwargs):
         # Cache size for API list payloads so we never stat the filesystem on every request.
