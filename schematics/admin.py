@@ -8,6 +8,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.translation import gettext_lazy as _
 
+from .admin_widgets import ProtectedAdminFileWidget
 from .models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicFile, SchematicPurchase
 
 
@@ -50,31 +51,6 @@ class SchematicAdminForm(forms.ModelForm):
                 _('برای نقشه پولی، قیمت باید بزرگ‌تر از صفر باشد.'),
             )
         return cleaned
-
-
-class ProtectedAdminFileWidget(forms.ClearableFileInput):
-    """
-    Admin file input that never calls storage.url().
-
-    ClearableFileInput treats an existing file as "initial" by reading
-    FieldFile.url. ProtectedSchematicStorage raises there on purpose, so the
-    change form would 500. Show the stored filename as plain text instead.
-    """
-
-    template_name = 'admin/schematics/widgets/protected_file_input.html'
-
-    def is_initial(self, value):
-        return bool(value) and bool(getattr(value, 'name', ''))
-
-    def format_value(self, value):
-        if self.is_initial(value):
-            return os.path.basename(value.name)
-        return None
-
-    def get_context(self, name, value, attrs):
-        context = super().get_context(name, value, attrs)
-        context['widget']['filename'] = self.format_value(value) or ''
-        return context
 
 
 class SchematicFileInlineForm(forms.ModelForm):

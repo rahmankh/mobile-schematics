@@ -9,7 +9,8 @@ from django.contrib import admin
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
-from schematics.admin import SchematicAdmin, SchematicFileInline
+from schematics.admin import SchematicAdmin, SchematicFileInline, SchematicFileInlineForm
+from schematics.admin_widgets import ProtectedAdminFileWidget
 from schematics.factories import (
     MINIMAL_PDF_BYTES,
     PhoneModelFactory,
@@ -43,6 +44,11 @@ def _inline_payload(file_title='Board PDF', upload=None):
 
 @pytest.mark.django_db
 class TestSchematicAdminForm:
+    def test_admin_module_loads_widget_without_nameerror(self):
+        assert SchematicFileInlineForm.Meta.widgets['file'] is ProtectedAdminFileWidget
+        form = SchematicFileInlineForm()
+        assert isinstance(form.fields['file'].widget, ProtectedAdminFileWidget)
+
     def test_schematic_file_is_not_a_standalone_admin_model(self):
         assert SchematicFile not in admin.site._registry
         model_admin = admin.site._registry[Schematic]
