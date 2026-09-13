@@ -10,7 +10,7 @@ from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Count, Prefetch
+from django.db.models import Count, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DetailView, FormView, TemplateView
@@ -34,27 +34,72 @@ class HomeView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['brands'] = Brand.objects.annotate(
+        query = (self.request.GET.get('q') or '').strip()
+        access = (self.request.GET.get('access') or '').strip()
+        category_slug = (self.request.GET.get('category') or '').strip()
+        is_filtered = bool(query or access or category_slug)
+
+        brands = Brand.objects.annotate(
             models_count=Count('phone_models', distinct=True),
             schematics_count=Count('phone_models__schematics', distinct=True),
         ).order_by('name')
-        context['categories'] = SchematicCategory.objects.annotate(
+        if query:
+            brands = brands.filter(
+                Q(name__icontains=query) | Q(phone_models__name__icontains=query)
+            ).distinct()
+
+        categories = SchematicCategory.objects.annotate(
             schematics_count=Count('schematics'),
         )
-        context['featured_schematics'] = (
+        sample_models = (
+            PhoneModel.objects.select_related('brand')
+            .annotate(schematics_count=Count('schematics'))
+            .order_by('brand__name', 'name')
+        )
+        if query:
+            sample_models = sample_models.filter(
+                Q(name__icontains=query)
+                | Q(technical_code__icontains=query)
+                | Q(brand__name__icontains=query)
+            )
+
+        schematics = (
             Schematic.objects.select_related(
                 'phone_model__brand',
                 'category',
             )
-            .annotate(files_count=Count('files'))
-            .order_by('-created_at')[:8]
+            .annotate(
+                files_count=Count('files'),
+                total_size=Sum('files__file_size_bytes'),
+            )
+            .order_by('-created_at')
         )
-        # Sample devices so the dashboard is browsable without opening a brand first.
-        context['sample_models'] = (
-            PhoneModel.objects.select_related('brand')
-            .annotate(schematics_count=Count('schematics'))
-            .order_by('brand__name', 'name')[:12]
-        )
+        if query:
+            schematics = schematics.filter(
+                Q(title__icontains=query)
+                | Q(description__icontains=query)
+                | Q(phone_model__name__icontains=query)
+                | Q(phone_model__technical_code__icontains=query)
+                | Q(phone_model__brand__name__icontains=query)
+            )
+        if access == 'free':
+            schematics = schematics.filter(is_free=True)
+        elif access == 'gated':
+            schematics = schematics.filter(is_free=False, requires_subscription=True)
+        elif access == 'paid':
+            schematics = schematics.filter(is_free=False)
+        if category_slug:
+            schematics = schematics.filter(category__slug=category_slug)
+
+        context['catalog_query'] = query
+        context['catalog_access'] = access
+        context['catalog_category'] = category_slug
+        context['is_filtered'] = is_filtered
+        context['brands'] = brands
+        context['categories'] = categories
+        context['sample_models'] = sample_models[:12]
+        context['featured_schematics'] = schematics[:50] if is_filtered else schematics[:8]
+        context['schematic_results_count'] = schematics.count() if is_filtered else None
         return context
 
 
@@ -95,8 +140,11 @@ class PhoneModelDetailView(TemplateView):
         context['phone_model'] = phone_model
         context['schematics'] = (
             Schematic.objects.filter(phone_model=phone_model)
-            .select_related('category')
-            .annotate(files_count=Count('files'))
+            .select_related('category', 'phone_model__brand')
+            .annotate(
+                files_count=Count('files'),
+                total_size=Sum('files__file_size_bytes'),
+            )
             .order_by('category__title', 'title')
         )
         return context

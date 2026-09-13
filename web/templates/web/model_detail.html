@@ -19,19 +19,7 @@
 {% if schematics %}
 <div class="grid">
     {% for item in schematics %}
-    <a class="card" href="{% url 'web:schematic-detail' item.pk %}">
-        <div>
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.category.title }} · {{ item.files_count }} فایل</p>
-        </div>
-        <div class="pills">
-            {% if item.is_free %}
-            <span class="pill free">رایگان</span>
-            {% else %}
-            <span class="pill paid">{{ item.price }} تومان</span>
-            {% endif %}
-        </div>
-    </a>
+        {% include "web/_schematic_card.html" %}
     {% endfor %}
 </div>
 {% else %}

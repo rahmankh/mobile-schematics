@@ -1,0 +1,18 @@
+{% if nav_brands %}
+  {% for brand in nav_brands %}
+    <div class="nav-brand-group">
+      <a class="nav-brand-link" href="{% url 'web:brand-detail' brand.slug %}">{{ brand.name }}</a>
+      {% if brand.popular_models %}
+        <ul class="menu nav-model-list">
+          {% for model in brand.popular_models %}
+            <li>
+              <a href="{% url 'web:model-detail' brand.slug model.slug %}">{{ model.name }}</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endfor %}
+{% else %}
+  <p class="nav-empty">برندی برای نمایش نیست</p>
+{% endif %}

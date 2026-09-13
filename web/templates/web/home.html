@@ -3,13 +3,50 @@
 {% block title %}کاتالوگ شماتیک موبایل{% endblock %}
 
 {% block content %}
-<section class="hero">
+<section class="hero catalog-hero">
     <h1>نقشه و بردویو گوشی‌های پرطرفدار</h1>
     <p>برند را انتخاب کنید، مدل را باز کنید و شماتیک، boardview و مسیر ولتاژ را ببینید.</p>
 </section>
 
-<h2 class="section-title">برندها</h2>
+<form class="catalog-toolbar" method="get" action="{% url 'web:home' %}" role="search">
+    <div class="catalog-toolbar-fields">
+        <label class="sr-only" for="catalog-q">جستجو</label>
+        <input id="catalog-q" type="search" name="q" value="{{ catalog_query }}" placeholder="جستجوی برند، مدل، کد فنی یا شماتیک">
+        <label class="sr-only" for="catalog-access">نوع دسترسی</label>
+        <select id="catalog-access" name="access">
+            <option value="" {% if not catalog_access %}selected{% endif %}>همه نقشه‌ها</option>
+            <option value="free" {% if catalog_access == 'free' %}selected{% endif %}>رایگان</option>
+            <option value="gated" {% if catalog_access == 'gated' %}selected{% endif %}>اشتراکی</option>
+            <option value="paid" {% if catalog_access == 'paid' %}selected{% endif %}>خرید تکی / قفل‌شده</option>
+        </select>
+        <label class="sr-only" for="catalog-category">دسته‌بندی</label>
+        <select id="catalog-category" name="category">
+            <option value="" {% if not catalog_category %}selected{% endif %}>همه دسته‌ها</option>
+            {% for category in categories %}
+            <option value="{{ category.slug }}" {% if catalog_category == category.slug %}selected{% endif %}>
+                {{ category.title }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="catalog-toolbar-actions">
+        <button class="btn btn-primary" type="submit">اعمال فیلتر</button>
+        {% if is_filtered %}
+        <a class="btn btn-ghost" href="{% url 'web:home' %}">پاک کردن</a>
+        {% endif %}
+    </div>
+</form>
+
+{% if is_filtered %}
+<p class="filter-status">
+    {{ schematic_results_count }} شماتیک مطابق فیلتر
+    {% if catalog_query %} برای «{{ catalog_query }}»{% endif %}
+</p>
+{% endif %}
+
+{% if not is_filtered or catalog_query %}
 {% if brands %}
+<h2 class="section-title">{% if catalog_query %}برندهای مطابق{% else %}برندها{% endif %}</h2>
 <div class="grid">
     {% for brand in brands %}
     <a class="card" href="{% url 'web:brand-detail' brand.slug %}">
@@ -23,20 +60,21 @@
     </a>
     {% endfor %}
 </div>
-{% else %}
+{% elif not is_filtered %}
 <div class="empty">هنوز برندی در کاتالوگ نیست. برای دادهٔ نمونه دستور <code>seed_demo_data</code> را اجرا کنید.</div>
 {% endif %}
+{% endif %}
 
-{% if categories %}
+{% if categories and not is_filtered %}
 <h2 class="section-title">دسته‌بندی نقشه‌ها</h2>
 <div class="pills">
     {% for category in categories %}
-    <span class="pill">{{ category.title }} ({{ category.schematics_count }})</span>
+    <a class="pill" href="?category={{ category.slug }}">{{ category.title }} ({{ category.schematics_count }})</a>
     {% endfor %}
 </div>
 {% endif %}
 
-{% if sample_models %}
+{% if sample_models and not is_filtered %}
 <h2 class="section-title">مدل‌های نمونه</h2>
 <div class="grid">
     {% for model in sample_models %}
@@ -52,24 +90,13 @@
 {% endif %}
 
 {% if featured_schematics %}
-<h2 class="section-title">شماتیک‌های تازه‌وارد</h2>
+<h2 class="section-title">{% if is_filtered %}نتایج شماتیک{% else %}شماتیک‌های تازه‌وارد{% endif %}</h2>
 <div class="grid">
     {% for item in featured_schematics %}
-    <a class="card" href="{% url 'web:schematic-detail' item.pk %}">
-        <div>
-            <h3>{{ item.title }}</h3>
-            <p>{{ item.phone_model.brand.name }} · {{ item.phone_model.name }}</p>
-        </div>
-        <div class="pills">
-            <span class="pill">{{ item.category.title }}</span>
-            {% if item.is_free %}
-            <span class="pill free">رایگان</span>
-            {% else %}
-            <span class="pill paid">{{ item.price }} تومان</span>
-            {% endif %}
-        </div>
-    </a>
+        {% include "web/_schematic_card.html" %}
     {% endfor %}
 </div>
+{% elif is_filtered %}
+<div class="empty">شماتیکی با این فیلتر پیدا نشد.</div>
 {% endif %}
 {% endblock %}

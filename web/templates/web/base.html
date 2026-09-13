@@ -5,48 +5,86 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}شماتیک موبایل{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'web/app.css' %}">
+    <link rel="stylesheet" href="{% static 'web/app.css' %}?v=nav-1">
 </head>
-<body>
-    <header class="topbar">
-        <a class="logo" href="{% url 'web:home' %}">
-            <span class="logo-mark">ش</span>
-            <span>
-                <strong>شماتیک موبایل</strong>
-                <small>نقشه و بردویو تعمیرکاران</small>
-            </span>
-        </a>
-        <div class="auth-box">
-            {% if user.is_authenticated %}
-                <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل تکنسین">
-                    <span class="avatar">{% firstof user.first_name|slice:":1" "ت" %}</span>
-                    <span class="profile-meta">
-                        <strong>{{ user.get_full_name|default:"تکنسین" }}</strong>
-                        <small class="phone">{{ user.phone_number }}</small>
+<body class="drawer">
+    <input id="nav-drawer" type="checkbox" class="drawer-toggle" autocomplete="off">
+    <div class="drawer-side">
+        <label for="nav-drawer" class="drawer-overlay" aria-label="بستن منو"></label>
+        <aside class="menu drawer-panel">
+            <p class="menu-title">برندها و مدل‌ها</p>
+            {% include "web/_nav_brands.html" %}
+            <form class="drawer-search" method="get" action="{% url 'web:home' %}" role="search">
+                <label class="sr-only" for="drawer-q">جستجوی کاتالوگ</label>
+                <input id="drawer-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="جستجوی برند، مدل یا شماتیک">
+                <button class="btn btn-primary" type="submit">جستجو</button>
+            </form>
+        </aside>
+    </div>
+
+    <div class="drawer-content">
+        <header class="topbar">
+            <div class="topbar-start">
+                <label for="nav-drawer" class="btn btn-ghost drawer-button" aria-label="منوی برندها">
+                    <span class="hamburger" aria-hidden="true"></span>
+                </label>
+                <a class="logo" href="{% url 'web:home' %}">
+                    <span class="logo-mark">ش</span>
+                    <span>
+                        <strong>شماتیک موبایل</strong>
+                        <small>نقشه و بردویو تعمیرکاران</small>
                     </span>
                 </a>
-                <form method="post" action="{% url 'web:logout' %}">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-ghost">خروج</button>
-                </form>
-            {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'register' or request.resolver_match.url_name == 'password-reset' or request.resolver_match.url_name == 'password-reset-confirm' %}
-                <a class="btn btn-ghost" href="{% url 'web:home' %}">بازگشت به صفحه اصلی</a>
-            {% else %}
-                <a class="btn btn-ghost" href="{% url 'web:login' %}">ورود</a>
-                <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
-            {% endif %}
-        </div>
-    </header>
+                {% if nav_brands %}
+                <div class="dropdown nav-dropdown">
+                    <button type="button" class="btn btn-ghost" tabindex="0" aria-haspopup="true">برندها</button>
+                    <div class="dropdown-content menu" tabindex="0">
+                        {% include "web/_nav_brands.html" %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
 
-    <main class="page">
-        {% if messages %}
-            <ul class="messages">
-                {% for message in messages %}
-                    <li class="{{ message.tags }}">{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-        {% block content %}{% endblock %}
-    </main>
+            {% if not is_auth_page %}
+            <form class="top-search" method="get" action="{% url 'web:home' %}" role="search">
+                <label class="sr-only" for="top-q">جستجوی کاتالوگ</label>
+                <input id="top-q" type="search" name="q" value="{{ request.GET.q }}" placeholder="جستجوی برند، مدل یا شماتیک">
+                <button class="btn btn-ghost" type="submit">جستجو</button>
+            </form>
+            {% endif %}
+
+            <div class="auth-box">
+                {% if user.is_authenticated %}
+                    <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل تکنسین">
+                        <span class="avatar">{% firstof user.first_name|slice:":1" "ت" %}</span>
+                        <span class="profile-meta">
+                            <strong>{{ user.get_full_name|default:"تکنسین" }}</strong>
+                            <small class="phone">{{ user.phone_number }}</small>
+                        </span>
+                    </a>
+                    <form method="post" action="{% url 'web:logout' %}">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-ghost">خروج</button>
+                    </form>
+                {% elif request.resolver_match.url_name == 'login' or request.resolver_match.url_name == 'register' or request.resolver_match.url_name == 'password-reset' or request.resolver_match.url_name == 'password-reset-confirm' %}
+                    <a class="btn btn-ghost" href="{% url 'web:home' %}">بازگشت به صفحه اصلی</a>
+                {% else %}
+                    <a class="btn btn-ghost" href="{% url 'web:login' %}">ورود</a>
+                    <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
+                {% endif %}
+            </div>
+        </header>
+
+        <main class="page">
+            {% if messages %}
+                <ul class="messages">
+                    {% for message in messages %}
+                        <li class="{{ message.tags }}">{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
 </body>
 </html>

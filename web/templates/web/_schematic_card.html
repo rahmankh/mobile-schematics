@@ -1,0 +1,29 @@
+<a class="card schematic-card" href="{% url 'web:schematic-detail' item.pk %}">
+    <div>
+        <h3>{{ item.title }}</h3>
+        <p>
+            {{ item.phone_model.brand.name }} · {{ item.phone_model.name }}
+            {% if item.category %} · {{ item.category.title }}{% endif %}
+        </p>
+    </div>
+    <div class="card-meta">
+        <div class="pills">
+            {% if item.is_free %}
+            <span class="pill free">رایگان</span>
+            {% else %}
+                {% if item.requires_subscription %}
+                <span class="pill gated">اشتراکی</span>
+                {% endif %}
+                <span class="pill paid">{% if item.price %}{{ item.price }} تومان{% else %}خرید تکی{% endif %}</span>
+            {% endif %}
+        </div>
+        <div class="card-stats">
+            {% if item.files_count %}
+            <span>{{ item.files_count }} فایل</span>
+            {% endif %}
+            {% if item.total_size %}
+            <span>{{ item.total_size|filesizeformat }}</span>
+            {% endif %}
+        </div>
+    </div>
+</a>

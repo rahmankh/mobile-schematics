@@ -35,7 +35,7 @@
 <div class="file-row">
     <div>
         <strong>{{ file.file_title }}</strong>
-        <div class="meta">{{ file.file_size_bytes }} بایت</div>
+        <div class="meta">{{ file.file_size_bytes|filesizeformat }}</div>
     </div>
     {% if can_download %}
     <a class="btn btn-primary" href="{% url 'schematics:schematic-file-download' file.pk %}">دانلود</a>

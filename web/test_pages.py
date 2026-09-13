@@ -5,9 +5,12 @@ from __future__ import annotations
 import pytest
 from django.urls import reverse
 
+from django.template.defaultfilters import filesizeformat
+
 from schematics.factories import (
     BrandFactory,
     PhoneModelFactory,
+    SchematicCategoryFactory,
     SchematicFactory,
     SchematicFileFactory,
     UserFactory,
@@ -190,6 +193,51 @@ class TestCatalogPages:
         assert 'Sara' in html
         assert 'Isfahan Lab' in html
         assert user.phone_number in html
+
+    def test_home_search_filters_schematics_and_keeps_auth_header(self, client):
+        SchematicFactory(title='Main Board')
+        SchematicFactory(title='UniqueXyz Voltage')
+
+        html = client.get(reverse('web:home'), {'q': 'UniqueXyz'}).content.decode('utf-8')
+
+        assert 'UniqueXyz Voltage' in html
+        assert 'Main Board' not in html
+        assert 'نتایج شماتیک' in html
+        assert 'class="btn btn-ghost" href="{0}">ورود</a>'.format(reverse('web:login')) in html
+        assert 'class="btn btn-primary" href="{0}">ثبت‌نام</a>'.format(reverse('web:register')) in html
+
+    def test_home_access_filter_hides_free_when_asking_for_gated(self, client):
+        SchematicFactory(title='Open Board', is_free=True, requires_subscription=False, price=0)
+        SchematicFactory(title='Locked Board', is_free=False, requires_subscription=True)
+
+        html = client.get(reverse('web:home'), {'access': 'gated'}).content.decode('utf-8')
+
+        assert 'Locked Board' in html
+        assert 'Open Board' not in html
+
+    def test_schematic_cards_show_file_size_and_access_badges(self, client):
+        category = SchematicCategoryFactory(title='Boardview', slug='boardview')
+        free_file = SchematicFileFactory(
+            schematic__title='Free Rail Map',
+            schematic__is_free=True,
+            schematic__requires_subscription=False,
+            schematic__price=0,
+            schematic__category=category,
+            file_title='Free PDF',
+        )
+        SchematicFactory(
+            title='Gated Rail Map',
+            is_free=False,
+            requires_subscription=True,
+            price=150000,
+            category=category,
+        )
+
+        html = client.get(reverse('web:home')).content.decode('utf-8')
+
+        assert 'رایگان' in html
+        assert 'اشتراکی' in html
+        assert filesizeformat(free_file.file_size_bytes) in html
 
 
 @pytest.mark.django_db
