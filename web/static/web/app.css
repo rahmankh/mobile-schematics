@@ -691,6 +691,50 @@ a.card:hover {
     padding: 0;
 }
 
+.result-card {
+    max-width: 520px;
+    margin: 40px auto;
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 32px 28px;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+
+.result-card h1 { margin: 12px 0 8px; font-size: 24px; }
+
+.result-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+.result-card.success .result-icon {
+    background: rgba(52, 211, 153, 0.16);
+    color: var(--accent-2);
+}
+
+.result-card.error .result-icon {
+    background: rgba(248, 113, 113, 0.16);
+    color: var(--danger);
+}
+
+.result-card .dl {
+    text-align: right;
+    margin: 20px 0 8px;
+}
+
+.result-actions {
+    justify-content: center;
+    margin-top: 22px;
+}
+
 .profile-card { margin: 0; max-width: 560px; }
 
 .wallet-topup {
@@ -737,7 +781,8 @@ a.card:hover {
     .profile-meta { display: none; }
     .logo small { display: none; }
     .page { padding: 20px 14px 48px; }
-    .login-card {
+    .login-card,
+    .result-card {
         margin: 16px auto;
         padding: 20px 16px;
         width: 100%;

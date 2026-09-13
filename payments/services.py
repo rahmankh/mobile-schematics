@@ -13,15 +13,15 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
+from django.urls import reverse
 from django.utils import timezone
-from rest_framework.reverse import reverse
 
 from accounts.services import get_or_create_checkout_user, issue_jwt_for, public_account_payload
 from schematics.models import Schematic
 from schematics.services import AlreadyPurchased, SchematicNotPurchasable, assert_schematic_purchasable, fulfill_schematic_purchase
 
 from .claims import claim_token_matches, generate_claim_token, hash_claim_token
-from .gateways import get_gateway
+from .gateways import HTML_CALLBACK_PATH, get_gateway
 from .models import PaymentTransaction
 
 SUBSCRIPTION_RETIRED_MESSAGE = (
@@ -261,10 +261,26 @@ def claim_guest_session(*, authority: str, claim_token: str) -> dict:
     return payload
 
 
+def parse_gateway_callback(params) -> tuple[str, bool]:
+    """
+    Read Zarinpal-style Authority/Status from a query mapping.
+
+    Empty Status is treated as OK so API clients can poll with authority only.
+    """
+    get = params.get
+    authority = str(get('Authority') or get('authority') or '').strip()
+    raw_status = str(get('Status') or get('status') or '')
+    gateway_ok = raw_status.upper() in ('OK', 'SUCCESS', '')
+    if raw_status.upper() in ('NOK', 'FAILED', 'CANCELED', 'CANCELLED'):
+        gateway_ok = False
+    return authority, gateway_ok
+
+
 def _default_callback(request) -> str:
+    """Gateway browsers return to the HTML result page, not the JSON verify API."""
     if request is None:
-        return '/api/v1/payments/verify/'
-    return request.build_absolute_uri(reverse('payments:payment-verify'))
+        return HTML_CALLBACK_PATH
+    return request.build_absolute_uri(reverse('web:payment-callback'))
 
 
 def mark_canceled(txn: PaymentTransaction) -> None:

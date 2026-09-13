@@ -20,6 +20,9 @@ from django.core.exceptions import ImproperlyConfigured
 SANDBOX_AUTHORITY_PREFIX = 'S.'
 _MOCK_AUTHORITY_PREFIXES = (SANDBOX_AUTHORITY_PREFIX, 'A.', 'MOCK')
 _ZARINPAL_HOST_MARKERS = ('zarinpal.com', 'zarinpal.ir')
+# Browser return path used when no callback_url is supplied. JSON verify stays at
+# /api/v1/payments/verify/ for programmatic clients.
+HTML_CALLBACK_PATH = '/payments/callback/'
 
 
 @dataclass(frozen=True)
@@ -64,10 +67,10 @@ def is_recognized_mock_authority(authority: str) -> bool:
 
 
 def _append_query(url: str, **params: str) -> str:
-    parts = urlsplit(url or '/api/v1/payments/verify/')
+    parts = urlsplit(url or HTML_CALLBACK_PATH)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query.update(params)
-    path = parts.path or '/api/v1/payments/verify/'
+    path = parts.path or HTML_CALLBACK_PATH
     return urlunsplit((parts.scheme, parts.netloc, path, urlencode(query), parts.fragment))
 
 
@@ -84,7 +87,7 @@ def _mock_payment_url(*, authority: str, callback_url: str) -> str:
     if template and not any(marker in template.lower() for marker in _ZARINPAL_HOST_MARKERS):
         return template.format(authority=authority)
     return _append_query(
-        callback_url or '/api/v1/payments/verify/',
+        callback_url or HTML_CALLBACK_PATH,
         Authority=authority,
         Status='OK',
     )

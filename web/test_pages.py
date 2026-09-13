@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from urllib.parse import parse_qsl, urlsplit
+
 import pytest
 from django.urls import reverse
 
@@ -17,6 +19,27 @@ from schematics.factories import (
     UserFactory,
     UserSubscriptionFactory,
 )
+
+DRF_CHROME_MARKERS = ('Django REST framework', 'Browsable API')
+
+
+def _callback_query(location: str) -> dict[str, str]:
+    return dict(parse_qsl(urlsplit(location).query))
+
+
+def _assert_html_payment_result(response, *, paid: bool) -> str:
+    html = response.content.decode('utf-8')
+    assert response.status_code == 200
+    assert 'text/html' in response['Content-Type']
+    for marker in DRF_CHROME_MARKERS:
+        assert marker not in html
+    if paid:
+        assert 'پرداخت با موفقیت انجام شد' in html
+        assert 'result-card success' in html
+    else:
+        assert 'پرداخت انجام نشد' in html
+        assert 'result-card error' in html
+    return html
 
 
 @pytest.mark.django_db
@@ -302,16 +325,75 @@ class TestCatalogPages:
         location = start['Location']
         assert 'Authority=S.' in location
         assert 'zarinpal.com' not in location
+        assert reverse('web:payment-callback') in location
+        assert '/api/v1/payments/verify/' not in location
 
         verify = client.get(location)
-        assert verify.status_code == 200
-        assert verify.json()['paid'] is True
+        html = _assert_html_payment_result(verify, paid=True)
+        assert 'بازگشت به شماتیک' in html
+        assert reverse('web:schematic-detail', kwargs={'pk': schematic.pk}) in html
         assert SchematicPurchase.objects.filter(user=user, schematic=schematic).exists()
 
         html = client.get(
             reverse('web:schematic-detail', kwargs={'pk': schematic.pk})
         ).content.decode('utf-8')
         assert 'schematic-viewer' in html
+
+    def test_canceled_gateway_return_shows_html_failure_card(self, client):
+        user = UserFactory()
+        schematic = SchematicFactory(is_free=False, price=150000, title='Canceled Board')
+        SchematicFileFactory(schematic=schematic)
+        client.force_login(user)
+
+        start = client.post(reverse('web:schematic-checkout', kwargs={'pk': schematic.pk}))
+        query = _callback_query(start['Location'])
+        result = client.get(
+            reverse('web:payment-callback'),
+            {'Authority': query['Authority'], 'Status': 'NOK'},
+        )
+        html = _assert_html_payment_result(result, paid=False)
+        assert 'پرداخت توسط کاربر لغو شد' in html
+        assert 'بازگشت به شماتیک' in html
+        assert SchematicPurchase.objects.filter(user=user, schematic=schematic).exists() is False
+
+    def test_browser_api_verify_redirects_to_html_result(self, client):
+        user = UserFactory()
+        schematic = SchematicFactory(is_free=False, price=90000, title='API Redirect Board')
+        client.force_login(user)
+
+        start = client.post(reverse('web:schematic-checkout', kwargs={'pk': schematic.pk}))
+        query = _callback_query(start['Location'])
+        bounced = client.get(
+            reverse('payments:payment-verify'),
+            {'Authority': query['Authority'], 'Status': 'OK'},
+            HTTP_ACCEPT='text/html,application/xhtml+xml',
+        )
+        assert bounced.status_code == 302
+        assert reverse('web:payment-callback') in bounced.url
+        result = client.get(bounced.url)
+        html = _assert_html_payment_result(result, paid=True)
+        assert 'بازگشت به شماتیک' in html
+
+    def test_wallet_topup_lands_on_html_success_page(self, client):
+        user = UserFactory(wallet_balance=0)
+        client.force_login(user)
+
+        start = client.post(reverse('web:wallet-topup'), {'amount': '100000'})
+        assert start.status_code == 302
+        assert reverse('web:payment-callback') in start['Location']
+
+        result = client.get(start['Location'])
+        html = _assert_html_payment_result(result, paid=True)
+        assert 'بازگشت به پروفایل' in html
+        assert reverse('web:profile') in html
+        user.refresh_from_db()
+        assert user.wallet_balance == 100000
+
+    def test_callback_without_authority_shows_html_error(self, client):
+        result = client.get(reverse('web:payment-callback'))
+        html = _assert_html_payment_result(result, paid=False)
+        assert 'پارامتر Authority الزامی است' in html
+        assert 'بازگشت به کاتالوگ' in html
 
 
 @pytest.mark.django_db
@@ -346,12 +428,12 @@ class TestCartBatchCheckout:
         location = start['Location']
         assert 'Authority=S.' in location
         assert 'zarinpal.com' not in location
+        assert reverse('web:payment-callback') in location
+        assert '/api/v1/payments/verify/' not in location
 
         verify = client.get(location)
-        assert verify.status_code == 200
-        payload = verify.json()
-        assert payload['paid'] is True
-        assert sorted(payload['schematic_ids']) == sorted([first.pk, second.pk])
+        html = _assert_html_payment_result(verify, paid=True)
+        assert 'بازگشت به شماتیک' in html
         assert SchematicPurchase.objects.filter(user=user).count() == 2
 
         first_page = client.get(

@@ -11,6 +11,7 @@ from .views import (
     HomeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
+    PaymentCallbackView,
     PhoneModelDetailView,
     ProfilePageView,
     SchematicCheckoutView,
@@ -41,6 +42,7 @@ urlpatterns = [
     path('cart/<int:pk>/remove/', CartRemoveView.as_view(), name='cart-remove'),
     path('schematics/<int:pk>/cart/', CartAddView.as_view(), name='cart-add'),
     path('wallet/topup/', WalletTopUpView.as_view(), name='wallet-topup'),
+    path('payments/callback/', PaymentCallbackView.as_view(), name='payment-callback'),
     path(
         'schematics/<int:pk>/checkout/',
         SchematicCheckoutView.as_view(),

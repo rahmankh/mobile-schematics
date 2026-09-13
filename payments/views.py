@@ -3,8 +3,11 @@ HTTP endpoints for gateway checkout.
 
 POST /request/  — authenticated; creates PENDING PaymentTransaction only.
 GET  /verify/   — gateway callback (no JWT); fulfills entitlements only on success.
+                  Browser GETs are redirected to the HTML result page.
 """
 
+from django.shortcuts import redirect
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -26,17 +29,54 @@ from .services import (
     PaymentError,
     claim_guest_session,
     create_payment_request,
+    parse_gateway_callback,
     start_guest_schematic_checkout,
     verify_and_fulfill,
 )
 
 
-class PaymentRequestView(APIView):
+def wants_browser_html(request) -> bool:
+    """True for browser navigations; False for JSON API clients."""
+    query = getattr(request, 'query_params', request.GET)
+    fmt = str(query.get('format') or '').lower()
+    if fmt == 'json':
+        return False
+    if fmt in ('api', 'html'):
+        return True
+    accept = (request.META.get('HTTP_ACCEPT') or '').lower()
+    return 'text/html' in accept
+
+
+def _html_callback_redirect(request):
+    """Send the gateway browser return to the styled HTML result page."""
+    target = reverse('web:payment-callback')
+    qs = request.META.get('QUERY_STRING')
+    if qs:
+        target = f'{target}?{qs}'
+    return redirect(target)
+
+
+class BrowserSafePaymentMixin:
+    """Keep browsers off DRF's browsable API chrome for payment routes."""
+
+    html_get_redirect = 'web:home'
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.method == 'GET' and wants_browser_html(request):
+            return self.get_html_redirect(request)
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_html_redirect(self, request):
+        return redirect(self.html_get_redirect)
+
+
+class PaymentRequestView(BrowserSafePaymentMixin, APIView):
     """
     POST /api/v1/payments/request/
 
     Body: {purpose: schematic|wallet, schematic_id?, schematic_ids?, amount?}
     Returns authority + payment_url. Does not unlock content.
+    Browser POSTs follow payment_url instead of rendering JSON.
     """
 
     permission_classes = [IsAuthenticated]
@@ -64,13 +104,16 @@ class PaymentRequestView(APIView):
         except PaymentError as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+        if wants_browser_html(request):
+            return redirect(payment_url)
+
         payload = PaymentTransactionSerializer(txn).data
         payload['payment_url'] = payment_url
         payload['detail'] = 'به درگاه پرداخت هدایت شوید.'
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
-class GuestCheckoutView(APIView):
+class GuestCheckoutView(BrowserSafePaymentMixin, APIView):
     """
     POST /api/v1/payments/guest/
 
@@ -108,32 +151,31 @@ class GuestCheckoutView(APIView):
         return Response(payload, status=status.HTTP_201_CREATED)
 
 
-class PaymentVerifyView(APIView):
+class PaymentVerifyView(BrowserSafePaymentMixin, APIView):
     """
     GET /api/v1/payments/verify/?Authority=...&Status=OK
 
     Gateway callback. Authority proves the payment, not the account.
     This endpoint fulfills entitlements and never mints JWT.
+    Browsers are sent to the HTML result page instead of DRF JSON.
     """
 
     permission_classes = [AllowAny]
+
+    def get_html_redirect(self, request):
+        return _html_callback_redirect(request)
 
     @extend_schema(
         tags=['payments'],
         responses={200: PaymentTransactionSerializer},
     )
     def get(self, request):
-        authority = request.query_params.get('Authority') or request.query_params.get('authority')
-        raw_status = (request.query_params.get('Status') or request.query_params.get('status') or '')
+        authority, gateway_ok = parse_gateway_callback(request.query_params)
         if not authority:
             return Response(
                 {'detail': 'پارامتر Authority الزامی است.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        gateway_ok = raw_status.upper() in ('OK', 'SUCCESS', '')
-        # Empty Status is treated as OK so mobile clients can poll with authority only.
-        if raw_status.upper() in ('NOK', 'FAILED', 'CANCELED', 'CANCELLED'):
-            gateway_ok = False
 
         try:
             txn = verify_and_fulfill(authority=authority, gateway_ok=gateway_ok)
@@ -146,7 +188,7 @@ class PaymentVerifyView(APIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
-class PaymentClaimView(APIView):
+class PaymentClaimView(BrowserSafePaymentMixin, APIView):
     """
     POST /api/v1/payments/claim/
 

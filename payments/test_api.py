@@ -57,6 +57,8 @@ class TestPaymentRequestAPI:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data['authority']
         assert response.data['payment_url']
+        assert '/payments/callback/' in response.data['payment_url']
+        assert '/api/v1/payments/verify/' not in response.data['payment_url']
         assert int(response.data['amount']) == 180000
         assert 'claim_token' not in response.data
         txn = PaymentTransaction.objects.get(authority=response.data['authority'])

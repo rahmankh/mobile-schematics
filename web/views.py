@@ -11,13 +11,21 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView, LogoutView
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Prefetch, Q, Sum
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views import View
 from django.views.generic import DetailView, FormView, TemplateView
 
 from accounts.password_reset import CONFIRM_SUCCESS_MESSAGE, GENERIC_REQUEST_MESSAGE
-from payments.services import PaymentConflict, PaymentError, create_payment_request, pay_schematic_from_wallet
+from payments.models import PaymentTransaction
+from payments.services import (
+    PaymentConflict,
+    PaymentError,
+    create_payment_request,
+    parse_gateway_callback,
+    pay_schematic_from_wallet,
+    verify_and_fulfill,
+)
 from schematics.models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicPurchase
 
 from .cart import add_to_cart, clear_cart, get_cart_ids, remove_from_cart
@@ -431,3 +439,57 @@ class WalletTopUpView(LoginRequiredMixin, View):
             messages.error(request, str(exc))
             return redirect('web:profile')
         return redirect(payment_url)
+
+
+class PaymentCallbackView(View):
+    """
+    Gateway return URL. Verifies the authority, then renders a styled
+    success/failure card instead of the JSON payment API.
+    """
+
+    http_method_names = ['get', 'head', 'options']
+
+    def get(self, request):
+        authority, gateway_ok = parse_gateway_callback(request.GET)
+        paid = False
+        detail = 'پارامتر Authority الزامی است.'
+        txn = None
+        if authority:
+            try:
+                txn = verify_and_fulfill(authority=authority, gateway_ok=gateway_ok)
+                paid = txn.status == PaymentTransaction.Status.PAID
+                detail = 'پرداخت با موفقیت تایید شد.' if paid else 'پرداخت تایید نشد.'
+            except PaymentError as exc:
+                detail = str(exc)
+                paid = False
+                txn = (
+                    PaymentTransaction.objects.filter(authority=authority)
+                    .select_related('schematic')
+                    .first()
+                )
+
+        return_url = reverse('web:home')
+        return_label = 'بازگشت به کاتالوگ'
+        if txn is not None:
+            schematic_id = txn.schematic_id
+            if not schematic_id:
+                ids = txn.purchased_schematic_ids()
+                schematic_id = ids[0] if ids else None
+            if schematic_id:
+                return_url = reverse('web:schematic-detail', kwargs={'pk': schematic_id})
+                return_label = 'بازگشت به شماتیک'
+            elif txn.purpose == PaymentTransaction.Purpose.WALLET:
+                return_url = reverse('web:profile')
+                return_label = 'بازگشت به پروفایل'
+
+        return render(
+            request,
+            'web/payment_result.html',
+            {
+                'paid': paid,
+                'detail': detail,
+                'txn': txn,
+                'return_url': return_url,
+                'return_label': return_label,
+            },
+        )
