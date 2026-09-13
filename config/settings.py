@@ -302,6 +302,8 @@ PASSWORD_RESET_OTP_RESEND_SECONDS = env.int('PASSWORD_RESET_OTP_RESEND_SECONDS',
 # Payment adapters. PAYMENT_GATEWAY=mock is legal only when DEBUG=True (or pytest).
 PAYMENT_GATEWAY = env('PAYMENT_GATEWAY', default='mock')
 PAYMENT_CALLBACK_URL = env('PAYMENT_CALLBACK_URL', default='')
+# Used by a future live adapter. Mock checkout ignores Zarinpal hosts — sandbox
+# StartPay rejects locally minted authorities even when they use the S. prefix.
 PAYMENT_START_URL_TEMPLATE = env(
     'PAYMENT_START_URL_TEMPLATE',
     default='https://sandbox.zarinpal.com/pg/StartPay/{authority}',

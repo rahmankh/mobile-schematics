@@ -9,10 +9,17 @@ class via settings.PAYMENT_GATEWAY.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+
+# Zarinpal sandbox authorities are `S.` + 32 hex chars. Production uses `A.`.
+# Legacy mock rows used a MOCK prefix; verify still accepts those.
+SANDBOX_AUTHORITY_PREFIX = 'S.'
+_MOCK_AUTHORITY_PREFIXES = (SANDBOX_AUTHORITY_PREFIX, 'A.', 'MOCK')
+_ZARINPAL_HOST_MARKERS = ('zarinpal.com', 'zarinpal.ir')
 
 
 @dataclass(frozen=True)
@@ -45,37 +52,74 @@ class PaymentGateway:
         raise NotImplementedError
 
 
+def mint_sandbox_authority() -> str:
+    """Return a Zarinpal-sandbox-shaped authority (`S.` + 32 hex)."""
+    return f'{SANDBOX_AUTHORITY_PREFIX}{uuid4().hex.upper()}'
+
+
+def is_recognized_mock_authority(authority: str) -> bool:
+    """True when verify should treat this handle as a local/sandbox mock token."""
+    value = str(authority or '')
+    return value.startswith(_MOCK_AUTHORITY_PREFIXES)
+
+
+def _append_query(url: str, **params: str) -> str:
+    parts = urlsplit(url or '/api/v1/payments/verify/')
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    path = parts.path or '/api/v1/payments/verify/'
+    return urlunsplit((parts.scheme, parts.netloc, path, urlencode(query), parts.fragment))
+
+
+def _mock_payment_url(*, authority: str, callback_url: str) -> str:
+    """
+    Build the browser hop after request_payment.
+
+    Real Zarinpal sandbox StartPay URLs reject authorities they did not issue
+    (validation error: sandbox codes must start with S.). Mock checkout therefore
+    returns to our verify callback with Status=OK instead of opening zarinpal.com.
+    An explicit non-Zarinpal PAYMENT_START_URL_TEMPLATE is still honored.
+    """
+    template = str(getattr(settings, 'PAYMENT_START_URL_TEMPLATE', '') or '')
+    if template and not any(marker in template.lower() for marker in _ZARINPAL_HOST_MARKERS):
+        return template.format(authority=authority)
+    return _append_query(
+        callback_url or '/api/v1/payments/verify/',
+        Authority=authority,
+        Status='OK',
+    )
+
+
 class MockGateway(PaymentGateway):
     """
     Local/sandbox gateway.
 
-    request_payment mints a MOCK… authority and a StartPay-style URL (same path
-    shape Zarinpal uses). verify_payment succeeds unless PAYMENT_MOCK_SUCCESS
-    is False, so tests can exercise the decline path without HTTP.
+    request_payment mints a Zarinpal-sandbox-shaped `S.…` authority and a URL
+    that returns to our verify callback. Hitting sandbox.zarinpal.com with a
+    locally minted code fails their authority check, so mock never does that.
 
-    LIVE_READY is False: production must not select this adapter.
+    verify_payment succeeds unless PAYMENT_MOCK_SUCCESS is False, so tests can
+    exercise the decline path without HTTP. LIVE_READY is False.
     """
 
     name = 'mock'
     LIVE_READY = False
 
     def request_payment(self, *, amount, description: str, callback_url: str, extra=None) -> PaymentRequestResult:
-        authority = 'MOCK' + uuid4().hex[:32].upper()
-        base = getattr(
-            settings,
-            'PAYMENT_START_URL_TEMPLATE',
-            'https://sandbox.zarinpal.com/pg/StartPay/{authority}',
-        )
+        authority = mint_sandbox_authority()
         return PaymentRequestResult(
             authority=authority,
-            payment_url=base.format(authority=authority),
+            payment_url=_mock_payment_url(authority=authority, callback_url=callback_url),
         )
 
     def verify_payment(self, *, authority: str, amount) -> PaymentVerifyResult:
         if not getattr(settings, 'PAYMENT_MOCK_SUCCESS', True):
             return PaymentVerifyResult(success=False, message='Mock gateway declined the payment.')
-        if not str(authority).startswith('MOCK'):
-            return PaymentVerifyResult(success=False, message='Unknown mock authority.')
+        if not is_recognized_mock_authority(authority):
+            return PaymentVerifyResult(
+                success=False,
+                message='کد authority نامعتبر است. در حالت آزمایشی باید با S. شروع شود.',
+            )
         # Deterministic-enough tracking code for receipts / admin search.
         ref = str(abs(hash(authority)) % 10_000_000)
         return PaymentVerifyResult(success=True, ref_id=ref, amount=int(amount))

@@ -7,6 +7,7 @@ from django.urls import reverse
 
 from django.template.defaultfilters import filesizeformat
 
+from schematics.models import SchematicPurchase
 from schematics.factories import (
     BrandFactory,
     PhoneModelFactory,
@@ -289,6 +290,28 @@ class TestCatalogPages:
         assert 'دانلود فایل خام غیرفعال است' in html
         assert 'viewer.js' in html
         assert user.phone_number in html
+
+    def test_single_purchase_mock_checkout_fulfills_after_verify_redirect(self, client):
+        user = UserFactory()
+        schematic = SchematicFactory(is_free=False, price=150000, title='Gateway Board')
+        SchematicFileFactory(schematic=schematic)
+        client.force_login(user)
+
+        start = client.post(reverse('web:schematic-checkout', kwargs={'pk': schematic.pk}))
+        assert start.status_code == 302
+        location = start['Location']
+        assert 'Authority=S.' in location
+        assert 'zarinpal.com' not in location
+
+        verify = client.get(location)
+        assert verify.status_code == 200
+        assert verify.json()['paid'] is True
+        assert SchematicPurchase.objects.filter(user=user, schematic=schematic).exists()
+
+        html = client.get(
+            reverse('web:schematic-detail', kwargs={'pk': schematic.pk})
+        ).content.decode('utf-8')
+        assert 'schematic-viewer' in html
 
 
 @pytest.mark.django_db
