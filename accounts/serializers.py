@@ -117,6 +117,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'subscription',
             'purchases',
             'purchase_count',
+            'wallet_balance',
         ]
         read_only_fields = [
             'id',
@@ -127,6 +128,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'subscription',
             'purchases',
             'purchase_count',
+            'wallet_balance',
         ]
 
     def _active_subscription(self, obj):

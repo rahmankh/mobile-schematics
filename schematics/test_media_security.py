@@ -87,20 +87,18 @@ class TestDownloadEndpointPermissions:
         url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         response = api_client.get(url)
         assert response.status_code == status.HTTP_403_FORBIDDEN
-        assert response.data['code'] in ('entitlement_required', 'purchase_required')
-        assert 'اشتراک' in str(response.data['detail']) or 'خرید' in str(response.data['detail'])
+        assert response.data['code'] == 'purchase_required'
+        assert 'خرید' in str(response.data['detail'])
         assert 'can_purchase' in response.data
 
-    def test_subscriber_can_download_bytes(self, api_client):
+    def test_subscriber_cannot_download_without_purchase(self, api_client):
         user = UserFactory()
         UserSubscriptionFactory(user=user)
         schematic_file = SchematicFileFactory()
         api_client.force_authenticate(user=user)
         url = reverse('schematics:schematic-file-download', kwargs={'pk': schematic_file.pk})
         response = api_client.get(url)
-        assert response.status_code == status.HTTP_200_OK
-        content = b''.join(response.streaming_content)
-        assert content == MINIMAL_PDF_BYTES
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_purchaser_can_download_without_subscription(self, api_client):
         user = UserFactory()

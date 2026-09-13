@@ -42,7 +42,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     """Technician (default) or admin account. USERNAME_FIELD is phone_number."""
 
     class RoleChoices(models.TextChoices):
-        TECHNICIAN = 'technician', _('Technician')
+        TECHNICIAN = 'technician', _('User')
         ADMIN = 'admin', _('Admin')
 
     phone_number = models.CharField(
@@ -69,6 +69,12 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(_('Active'), default=True)
     is_staff = models.BooleanField(_('Staff Status'), default=False)
     date_joined = models.DateTimeField(_('Date Joined'), default=timezone.now)
+    wallet_balance = models.DecimalField(
+        _('Wallet balance (Tomans)'),
+        max_digits=12,
+        decimal_places=0,
+        default=0,
+    )
 
     objects = CustomUserManager()
 

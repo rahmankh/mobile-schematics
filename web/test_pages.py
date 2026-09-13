@@ -114,7 +114,8 @@ class TestCatalogPages:
     def test_register_page_is_linked_from_login(self, client):
         html = client.get(reverse('web:login')).content.decode('utf-8')
         assert reverse('web:register') in html
-        assert 'ثبت‌نام تکنسین' in html
+        assert 'ثبت‌نام' in html
+        assert 'تکنسین' not in html
         assert reverse('web:password-reset') in html
         assert 'رمز عبور را فراموش کرده‌اید؟' in html
 
@@ -130,7 +131,8 @@ class TestCatalogPages:
         assert f'href="{home_url}"' in login_html
         assert header_login not in login_html
         assert header_register not in login_html
-        assert 'ثبت‌نام تکنسین' in login_html
+        assert 'ثبت‌نام' in login_html
+        assert 'تکنسین' not in login_html
 
         register_html = client.get(register_url).content.decode('utf-8')
         assert 'بازگشت به صفحه اصلی' in register_html
@@ -183,8 +185,8 @@ class TestCatalogPages:
         assert response.status_code == 302
         assert reverse('web:login') in response.url
 
-    def test_profile_shows_active_subscription(self, client):
-        user = UserFactory(first_name='Sara', repair_shop_name='Isfahan Lab')
+    def test_profile_shows_wallet_instead_of_subscription(self, client):
+        user = UserFactory(first_name='Sara', repair_shop_name='Isfahan Lab', wallet_balance=75000)
         UserSubscriptionFactory(user=user)
         client.force_login(user)
 
@@ -193,6 +195,10 @@ class TestCatalogPages:
         assert 'Sara' in html
         assert 'Isfahan Lab' in html
         assert user.phone_number in html
+        assert 'شارژ کیف پول' in html
+        assert '75000' in html or '۷۵' in html
+        assert 'اشتراک فعال ندارید' not in html
+        assert 'تکنسین' not in html
 
     def test_home_search_filters_schematics_and_keeps_auth_header(self, client):
         SchematicFactory(title='Main Board')
@@ -206,11 +212,11 @@ class TestCatalogPages:
         assert 'class="btn btn-ghost" href="{0}">ورود</a>'.format(reverse('web:login')) in html
         assert 'class="btn btn-primary" href="{0}">ثبت‌نام</a>'.format(reverse('web:register')) in html
 
-    def test_home_access_filter_hides_free_when_asking_for_gated(self, client):
+    def test_home_access_filter_hides_free_when_asking_for_paid(self, client):
         SchematicFactory(title='Open Board', is_free=True, requires_subscription=False, price=0)
         SchematicFactory(title='Locked Board', is_free=False, requires_subscription=True)
 
-        html = client.get(reverse('web:home'), {'access': 'gated'}).content.decode('utf-8')
+        html = client.get(reverse('web:home'), {'access': 'paid'}).content.decode('utf-8')
 
         assert 'Locked Board' in html
         assert 'Open Board' not in html
@@ -236,8 +242,36 @@ class TestCatalogPages:
         html = client.get(reverse('web:home')).content.decode('utf-8')
 
         assert 'رایگان' in html
-        assert 'اشتراکی' in html
+        assert 'خرید تکی' in html
+        assert 'اشتراکی' not in html
         assert filesizeformat(free_file.file_size_bytes) in html
+
+    def test_catalog_pages_load_vazirmatn_and_omit_technician_copy(self, client):
+        html = client.get(reverse('web:home')).content.decode('utf-8')
+        assert 'Vazirmatn' in html
+        assert 'تکنسین' not in html
+        assert 'dir="rtl"' in html
+
+    def test_wallet_pay_from_schematic_page(self, client):
+        user = UserFactory(wallet_balance=200000)
+        schematic = SchematicFactory(is_free=False, price=150000, title='Paid Board')
+        SchematicFileFactory(schematic=schematic)
+        client.force_login(user)
+
+        html = client.get(
+            reverse('web:schematic-detail', kwargs={'pk': schematic.pk})
+        ).content.decode('utf-8')
+        assert 'خرید تکی' in html
+        assert 'پرداخت از کیف پول' in html
+        assert 'اشتراکی' not in html
+        assert 'با اشتراک' not in html
+
+        response = client.post(reverse('web:wallet-pay-schematic', kwargs={'pk': schematic.pk}))
+        assert response.status_code == 302
+        user.refresh_from_db()
+        assert user.wallet_balance == 50000
+        bought = client.get(reverse('web:schematic-detail', kwargs={'pk': schematic.pk}))
+        assert 'دانلود' in bought.content.decode('utf-8')
 
 
 @pytest.mark.django_db

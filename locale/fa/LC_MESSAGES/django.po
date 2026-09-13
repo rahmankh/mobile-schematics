@@ -88,7 +88,7 @@ msgid "Repair Shop Name"
 msgstr "نام تعمیرگاه"
 
 msgid "Technician"
-msgstr "تکنسین"
+msgstr "کاربر"
 
 msgid "Role"
 msgstr "نقش کاربری"

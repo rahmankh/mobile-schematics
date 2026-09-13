@@ -35,7 +35,7 @@ class PaymentRequestView(APIView):
     """
     POST /api/v1/payments/request/
 
-    Body: {purpose: schematic|subscription, schematic_id? , plan_id?}
+    Body: {purpose: schematic|wallet, schematic_id? , amount?}
     Returns authority + payment_url. Does not unlock content.
     """
 
@@ -55,6 +55,7 @@ class PaymentRequestView(APIView):
                 purpose=serializer.validated_data['purpose'],
                 schematic_id=serializer.validated_data.get('schematic_id'),
                 plan_id=serializer.validated_data.get('plan_id'),
+                amount=serializer.validated_data.get('amount'),
                 request=request,
             )
         except PaymentConflict as exc:

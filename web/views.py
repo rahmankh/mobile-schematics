@@ -1,5 +1,5 @@
 """
-HTML catalog pages for technicians.
+HTML catalog pages for the web UI.
 
 The JSON API under /api/v1/ stays untouched. These views render real pages
 (brands, models, schematics) plus session login/logout in the site header.
@@ -13,11 +13,12 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Prefetch, Q, Sum
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
+from django.views import View
 from django.views.generic import DetailView, FormView, TemplateView
 
 from accounts.password_reset import CONFIRM_SUCCESS_MESSAGE, GENERIC_REQUEST_MESSAGE
+from payments.services import PaymentConflict, PaymentError, create_payment_request, pay_schematic_from_wallet
 from schematics.models import Brand, PhoneModel, Schematic, SchematicCategory
-from subscriptions.models import UserSubscription
 
 from .forms import (
     PasswordResetConfirmForm,
@@ -84,8 +85,6 @@ class HomeView(TemplateView):
             )
         if access == 'free':
             schematics = schematics.filter(is_free=True)
-        elif access == 'gated':
-            schematics = schematics.filter(is_free=False, requires_subscription=True)
         elif access == 'paid':
             schematics = schematics.filter(is_free=False)
         if category_slug:
@@ -167,7 +166,16 @@ class SchematicDetailPageView(DetailView):
         context = super().get_context_data(**kwargs)
         schematic = context['schematic']
         user = self.request.user
-        context['can_download'] = schematic.user_can_download(user) if user.is_authenticated else False
+        can_download = schematic.user_can_download(user) if user.is_authenticated else False
+        wallet_balance = getattr(user, 'wallet_balance', 0) if user.is_authenticated else 0
+        context['can_download'] = can_download
+        context['can_wallet_pay'] = (
+            user.is_authenticated
+            and not can_download
+            and not schematic.is_free
+            and schematic.price > 0
+            and wallet_balance >= schematic.price
+        )
         return context
 
 
@@ -254,18 +262,69 @@ class TechnicianLogoutView(LogoutView):
 
 
 class ProfilePageView(LoginRequiredMixin, TemplateView):
-    """Technician identity + current subscription, used by the header profile link."""
+    """Account identity, wallet balance, and single-copy purchases."""
 
     template_name = 'web/profile.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['subscription'] = (
-            UserSubscription.objects.filter(user=self.request.user)
-            .select_related('plan')
-            .active_subscriptions()
-            .order_by('-end_date')
-            .first()
-        )
         context['purchase_count'] = self.request.user.schematic_purchases.count()
         return context
+
+
+class SchematicCheckoutView(LoginRequiredMixin, View):
+    """Start a gateway session for a single schematic purchase."""
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        try:
+            _txn, payment_url = create_payment_request(
+                user=request.user,
+                purpose='schematic',
+                schematic_id=pk,
+                request=request,
+            )
+        except PaymentConflict as exc:
+            messages.error(request, str(exc))
+            return redirect('web:schematic-detail', pk=pk)
+        except PaymentError as exc:
+            messages.error(request, str(exc))
+            return redirect('web:schematic-detail', pk=pk)
+        return redirect(payment_url)
+
+
+class WalletPaySchematicView(LoginRequiredMixin, View):
+    """Spend wallet balance on one schematic."""
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        try:
+            pay_schematic_from_wallet(request.user, pk)
+        except PaymentConflict as exc:
+            messages.error(request, str(exc))
+        except PaymentError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, 'خرید با کیف پول انجام شد.')
+        return redirect('web:schematic-detail', pk=pk)
+
+
+class WalletTopUpView(LoginRequiredMixin, View):
+    """Start a gateway session that credits the user's wallet after verify."""
+
+    http_method_names = ['post']
+
+    def post(self, request):
+        try:
+            _txn, payment_url = create_payment_request(
+                user=request.user,
+                purpose='wallet',
+                amount=request.POST.get('amount'),
+                request=request,
+            )
+        except PaymentError as exc:
+            messages.error(request, str(exc))
+            return redirect('web:profile')
+        return redirect(payment_url)

@@ -44,6 +44,7 @@ class TestProfileDashboard:
         assert data['subscription']['id'] == sub.pk
         assert data['subscription']['plan_title'] == sub.plan.title
         assert data['purchase_count'] == 1
+        assert str(data['wallet_balance']) in ('0', '0.00')
         ids = [row['id'] for row in data['purchases']]
         assert ids == [purchase.pk]
         assert data['purchases'][0]['schematic_title'] == purchase.schematic.title
@@ -59,6 +60,7 @@ class TestProfileDashboard:
         assert response.data['subscription'] is None
         assert response.data['purchases'] == []
         assert response.data['purchase_count'] == 0
+        assert str(response.data['wallet_balance']) in ('0', '0.00')
 
     def test_guest_profile_flags_is_guest(self, api_client):
         user = User.objects.create_user(phone_number='09125550002', password=None)

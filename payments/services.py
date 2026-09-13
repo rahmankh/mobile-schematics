@@ -17,12 +17,15 @@ from rest_framework.reverse import reverse
 from accounts.services import get_or_create_checkout_user, issue_jwt_for, public_account_payload
 from schematics.models import Schematic
 from schematics.services import AlreadyPurchased, SchematicNotPurchasable, assert_schematic_purchasable, fulfill_schematic_purchase
-from subscriptions.models import Plan
-from subscriptions.services import fulfill_subscription
 
 from .claims import claim_token_matches, generate_claim_token, hash_claim_token
 from .gateways import get_gateway
 from .models import PaymentTransaction
+
+SUBSCRIPTION_RETIRED_MESSAGE = (
+    'خرید اشتراک دیگر پشتیبانی نمی‌شود. از شارژ کیف پول یا خرید تکی استفاده کنید.'
+)
+MIN_WALLET_TOPUP = 10000
 
 
 class PaymentError(Exception):
@@ -43,6 +46,7 @@ def create_payment_request(
     purpose: str,
     schematic_id=None,
     plan_id=None,
+    amount=None,
     request=None,
     claim_token_hash: str = '',
     guest_account_created: bool = False,
@@ -50,8 +54,11 @@ def create_payment_request(
     """
     Validate the cart, ask the gateway for an authority, then store PENDING.
 
-    No SchematicPurchase or UserSubscription is written here.
+    No SchematicPurchase is written here. Subscription checkouts are retired.
     """
+    if purpose == PaymentTransaction.Purpose.SUBSCRIPTION:
+        raise PaymentError(SUBSCRIPTION_RETIRED_MESSAGE)
+
     if purpose == PaymentTransaction.Purpose.SCHEMATIC:
         if not schematic_id:
             raise PaymentError('schematic_id الزامی است.')
@@ -68,16 +75,16 @@ def create_payment_request(
         amount = schematic.price
         plan = None
         description = f'Schematic #{schematic.pk} {schematic.title}'[:255]
-    elif purpose == PaymentTransaction.Purpose.SUBSCRIPTION:
-        if not plan_id:
-            raise PaymentError('plan_id الزامی است.')
-        try:
-            plan = Plan.objects.get(pk=plan_id, is_active=True)
-        except Plan.DoesNotExist as exc:
-            raise PaymentError('پلن انتخابی معتبر یا فعال نیست.') from exc
+    elif purpose == PaymentTransaction.Purpose.WALLET:
         schematic = None
-        amount = plan.price
-        description = f'Subscription plan #{plan.pk} {plan.title}'[:255]
+        plan = None
+        try:
+            amount = int(amount)
+        except (TypeError, ValueError) as exc:
+            raise PaymentError('مبلغ شارژ کیف پول نامعتبر است.') from exc
+        if amount < MIN_WALLET_TOPUP:
+            raise PaymentError(f'حداقل شارژ کیف پول {MIN_WALLET_TOPUP} تومان است.')
+        description = f'Wallet top-up {amount}'[:255]
     else:
         raise PaymentError('purpose نامعتبر است.')
 
@@ -252,7 +259,45 @@ def _grant_entitlement(txn: PaymentTransaction) -> None:
     """Insert commerce rows. Called only from verify_and_fulfill inside an atomic block."""
     if txn.purpose == PaymentTransaction.Purpose.SCHEMATIC and txn.schematic_id:
         fulfill_schematic_purchase(txn.user, txn.schematic, price_paid=txn.amount)
-    elif txn.purpose == PaymentTransaction.Purpose.SUBSCRIPTION and txn.plan_id:
-        fulfill_subscription(txn.user, txn.plan)
+    elif txn.purpose == PaymentTransaction.Purpose.WALLET:
+        credit_wallet(txn.user, txn.amount)
+    elif txn.purpose == PaymentTransaction.Purpose.SUBSCRIPTION:
+        raise PaymentError(SUBSCRIPTION_RETIRED_MESSAGE)
     else:
         raise PaymentError('تراکنش هدف مشخصی برای فعال‌سازی ندارد.')
+
+
+def credit_wallet(user, amount) -> None:
+    """Add Tomans to the user's wallet. Caller must be inside an atomic block when verifying."""
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    locked = User.objects.select_for_update().get(pk=user.pk)
+    locked.wallet_balance = (locked.wallet_balance or 0) + amount
+    locked.save(update_fields=['wallet_balance'])
+
+
+def pay_schematic_from_wallet(user, schematic_id):
+    """Spend wallet balance on a single schematic. No gateway round-trip."""
+    try:
+        schematic = Schematic.objects.get(pk=schematic_id)
+    except Schematic.DoesNotExist as exc:
+        raise PaymentError('شماتیک مورد نظر یافت نشد.') from exc
+    try:
+        assert_schematic_purchasable(user, schematic)
+    except AlreadyPurchased as exc:
+        raise PaymentConflict(str(exc)) from exc
+    except SchematicNotPurchasable as exc:
+        raise PaymentError(str(exc)) from exc
+
+    amount = schematic.price
+    from django.contrib.auth import get_user_model
+
+    User = get_user_model()
+    with transaction.atomic():
+        locked = User.objects.select_for_update().get(pk=user.pk)
+        if locked.wallet_balance < amount:
+            raise PaymentError('موجودی کیف پول کافی نیست.')
+        locked.wallet_balance -= amount
+        locked.save(update_fields=['wallet_balance'])
+        return fulfill_schematic_purchase(locked, schematic, price_paid=amount)

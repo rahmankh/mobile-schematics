@@ -5,7 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}شماتیک موبایل{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'web/app.css' %}?v=nav-1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'web/app.css' %}?v=nav-2">
 </head>
 <body class="drawer">
     <input id="nav-drawer" type="checkbox" class="drawer-toggle" autocomplete="off">
@@ -55,10 +58,10 @@
 
             <div class="auth-box">
                 {% if user.is_authenticated %}
-                    <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل تکنسین">
-                        <span class="avatar">{% firstof user.first_name|slice:":1" "ت" %}</span>
+                    <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل">
+                        <span class="avatar">{% firstof user.first_name|slice:":1" "ک" %}</span>
                         <span class="profile-meta">
-                            <strong>{{ user.get_full_name|default:"تکنسین" }}</strong>
+                            <strong>{{ user.get_full_name|default:"کاربر" }}</strong>
                             <small class="phone">{{ user.phone_number }}</small>
                         </span>
                     </a>

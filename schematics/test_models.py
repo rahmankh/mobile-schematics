@@ -81,16 +81,16 @@ class TestSchematicDownloadAccessMatrix:
         schematic = SchematicFactory(is_free=True, requires_subscription=False, price=0)
         assert schematic.user_can_download(user) is True
 
-    def test_paid_schematic_denied_without_subscription_or_purchase(self):
+    def test_paid_schematic_denied_without_purchase(self):
         user = UserFactory()
         schematic = SchematicFactory(is_free=False, requires_subscription=True)
         assert schematic.user_can_download(user) is False
 
-    def test_active_subscription_grants_access_when_requires_subscription(self):
+    def test_active_subscription_does_not_grant_download(self):
         user = UserFactory()
         schematic = SchematicFactory(is_free=False, requires_subscription=True)
         UserSubscriptionFactory(user=user)
-        assert schematic.user_can_download(user) is True
+        assert schematic.user_can_download(user) is False
 
     def test_expired_subscription_does_not_grant_access(self):
         user = UserFactory()
@@ -114,7 +114,7 @@ class TestSchematicDownloadAccessMatrix:
         schematic = SchematicFactory(is_free=False, requires_subscription=True)
         assert schematic.user_can_download(staff) is True
 
-    def test_subscription_excluded_paid_item_requires_purchase(self):
+    def test_subscription_never_unlocks_paid_item(self):
         user = UserFactory()
         schematic = SchematicFactory(is_free=False, requires_subscription=False)
         UserSubscriptionFactory(user=user)

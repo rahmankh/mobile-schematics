@@ -1,10 +1,10 @@
 {% extends "web/base.html" %}
 
-{% block title %}ورود تکنسین{% endblock %}
+{% block title %}ورود به حساب{% endblock %}
 
 {% block content %}
 <div class="login-card">
-    <h1>ورود به حساب تکنسین</h1>
+    <h1>ورود به حساب</h1>
     <p class="lede">با شماره موبایل و رمز عبور وارد شوید تا پروفایل و دانلود برایتان فعال شود.</p>
     <form method="post" action="{% url 'web:login' %}">
         {% csrf_token %}
@@ -23,7 +23,7 @@
         <button class="btn btn-primary" type="submit">ورود</button>
     </form>
     <p class="auth-switch"><a href="{% url 'web:password-reset' %}">رمز عبور را فراموش کرده‌اید؟</a></p>
-    <p class="auth-switch">حساب ندارید؟ <a href="{% url 'web:register' %}">ثبت‌نام تکنسین</a></p>
+    <p class="auth-switch">حساب ندارید؟ <a href="{% url 'web:register' %}">ثبت‌نام</a></p>
     <div class="hint">
         نمونه محلی:<br>
         09121111111 / TechPass123!<br>

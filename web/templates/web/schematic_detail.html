@@ -19,9 +19,6 @@
         {% else %}
         <span class="pill paid">خرید تکی {{ schematic.price }} تومان</span>
         {% endif %}
-        {% if schematic.requires_subscription %}
-        <span class="pill">با اشتراک قابل دانلود</span>
-        {% endif %}
     </div>
 </section>
 
@@ -40,10 +37,25 @@
     {% if can_download %}
     <a class="btn btn-primary" href="{% url 'schematics:schematic-file-download' file.pk %}">دانلود</a>
     {% elif user.is_authenticated %}
-    <span class="pill paid">نیاز به اشتراک یا خرید</span>
+    <div class="file-actions">
+        <form method="post" action="{% url 'web:schematic-checkout' schematic.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-primary" type="submit">خرید تکی</button>
+        </form>
+        {% if can_wallet_pay %}
+        <form method="post" action="{% url 'web:wallet-pay-schematic' schematic.pk %}">
+            {% csrf_token %}
+            <button class="btn btn-ghost" type="submit">پرداخت از کیف پول</button>
+        </form>
+        {% else %}
+        <a class="btn btn-ghost" href="{% url 'web:profile' %}">شارژ کیف پول</a>
+        {% endif %}
+    </div>
     {% else %}
-    <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای دانلود وارد شوید</a>
-    <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
+    <div class="file-actions">
+        <a class="btn" href="{% url 'web:login' %}?next={{ request.path }}">برای دانلود وارد شوید</a>
+        <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
+    </div>
     {% endif %}
 </div>
 {% empty %}

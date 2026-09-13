@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 from django.urls import reverse
-from django.utils import timezone
 from rest_framework import status
 
 from payments.models import PaymentTransaction
@@ -81,7 +80,7 @@ class TestPaymentRequestAPI:
         assert response.status_code == status.HTTP_409_CONFLICT
         assert PaymentTransaction.objects.filter(user=user).count() == 0
 
-    def test_subscription_request_does_not_activate_plan(self, api_client, request_url):
+    def test_subscription_request_is_rejected(self, api_client, request_url):
         user = UserFactory()
         plan = PlanFactory(price=250000, duration_days=30)
         api_client.force_authenticate(user=user)
@@ -92,9 +91,9 @@ class TestPaymentRequestAPI:
             format='json',
         )
 
-        assert response.status_code == status.HTTP_201_CREATED
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert UserSubscription.objects.filter(user=user).count() == 0
-        assert UserSubscription.objects.has_active_subscription(user) is False
+        assert PaymentTransaction.objects.filter(user=user).count() == 0
 
 
 @pytest.mark.django_db
@@ -181,16 +180,13 @@ class TestPaymentVerifyAPI:
         assert txn.ref_id
         assert txn.verified_at is not None
 
-    def test_successful_verify_activates_subscription(
-        self, api_client, request_url, verify_url
-    ):
-        user = UserFactory()
-        plan = PlanFactory(price=250000, duration_days=30)
+    def test_successful_verify_credits_wallet(self, api_client, request_url, verify_url):
+        user = UserFactory(wallet_balance=0)
         started = self._start(
             api_client,
             request_url,
             user,
-            {'purpose': 'subscription', 'plan_id': plan.pk},
+            {'purpose': 'wallet', 'amount': 100000},
         )
 
         response = api_client.get(
@@ -199,9 +195,8 @@ class TestPaymentVerifyAPI:
         )
 
         assert response.status_code == status.HTTP_200_OK
-        assert UserSubscription.objects.has_active_subscription(user) is True
-        sub = UserSubscription.objects.get(user=user)
-        assert sub.end_date > timezone.now()
+        user.refresh_from_db()
+        assert user.wallet_balance == 100000
 
     def test_verify_is_idempotent_and_does_not_duplicate_purchase(
         self, api_client, request_url, verify_url
@@ -222,10 +217,7 @@ class TestPaymentVerifyAPI:
         assert second.status_code == status.HTTP_200_OK
         assert SchematicPurchase.objects.filter(user=user, schematic=schematic).count() == 1
 
-    def test_legacy_subscription_purchase_endpoint_starts_payment_instead_of_activating(
-        self, api_client
-    ):
-        """POST /subscriptions/purchase/ must not insert UserSubscription before verify."""
+    def test_legacy_subscription_purchase_endpoint_is_gone(self, api_client):
         user = UserFactory()
         plan = PlanFactory(is_active=True, price=100000)
         api_client.force_authenticate(user=user)
@@ -236,6 +228,30 @@ class TestPaymentVerifyAPI:
             format='json',
         )
 
-        assert response.status_code == status.HTTP_201_CREATED
-        assert 'payment_url' in response.data
+        assert response.status_code == status.HTTP_410_GONE
         assert UserSubscription.objects.filter(user=user).count() == 0
+
+
+@pytest.mark.django_db
+class TestWalletSpend:
+    def test_wallet_pays_for_schematic_and_grants_download(self):
+        from payments.services import pay_schematic_from_wallet
+
+        user = UserFactory(wallet_balance=200000)
+        schematic = SchematicFactory(is_free=False, price=120000)
+        pay_schematic_from_wallet(user, schematic.pk)
+        user.refresh_from_db()
+        assert user.wallet_balance == 80000
+        assert SchematicPurchase.objects.filter(user=user, schematic=schematic).exists()
+        assert schematic.user_can_download(user) is True
+
+    def test_wallet_pay_rejects_insufficient_balance(self):
+        from payments.services import PaymentError, pay_schematic_from_wallet
+
+        user = UserFactory(wallet_balance=1000)
+        schematic = SchematicFactory(is_free=False, price=120000)
+        with pytest.raises(PaymentError):
+            pay_schematic_from_wallet(user, schematic.pk)
+        user.refresh_from_db()
+        assert user.wallet_balance == 1000
+        assert schematic.user_can_download(user) is False

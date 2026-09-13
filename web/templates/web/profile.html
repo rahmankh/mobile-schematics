@@ -1,30 +1,33 @@
 {% extends "web/base.html" %}
 
-{% block title %}پروفایل تکنسین{% endblock %}
+{% block title %}پروفایل{% endblock %}
 
 {% block content %}
 <section class="hero">
-    <h1>پروفایل تکنسین</h1>
-    <p class="lede">مشخصات حساب و وضعیت اشتراک فعلی.</p>
+    <h1>پروفایل</h1>
+    <p class="lede">مشخصات حساب، موجودی کیف پول و خریدهای تکی.</p>
 </section>
 
-<div class="login-card" style="margin:0; max-width:560px;">
+<div class="login-card profile-card">
     <div class="dl">
         <div><span>نام</span><strong>{{ user.get_full_name|default:"—" }}</strong></div>
         <div><span>موبایل</span><strong dir="ltr">{{ user.phone_number }}</strong></div>
         <div><span>تعمیرگاه</span><strong>{{ user.repair_shop_name|default:"—" }}</strong></div>
-        <div><span>نقش</span><strong>{{ user.get_role_display }}</strong></div>
-        <div>
-            <span>اشتراک</span>
-            <strong>
-                {% if subscription %}
-                    {{ subscription.plan.title }} تا {{ subscription.end_date|date:"Y/m/d" }}
-                {% else %}
-                    اشتراک فعال ندارید
-                {% endif %}
-            </strong>
-        </div>
+        <div><span>کیف پول</span><strong>{{ user.wallet_balance }} تومان</strong></div>
         <div><span>خریدهای تکی</span><strong>{{ purchase_count }}</strong></div>
     </div>
+
+    <h2 class="section-title">شارژ کیف پول</h2>
+    <form method="post" action="{% url 'web:wallet-topup' %}" class="wallet-topup">
+        {% csrf_token %}
+        <label class="sr-only" for="wallet-amount">مبلغ شارژ</label>
+        <select id="wallet-amount" name="amount">
+            <option value="50000">۵۰٬۰۰۰ تومان</option>
+            <option value="100000" selected>۱۰۰٬۰۰۰ تومان</option>
+            <option value="200000">۲۰۰٬۰۰۰ تومان</option>
+            <option value="500000">۵۰۰٬۰۰۰ تومان</option>
+        </select>
+        <button class="btn btn-primary" type="submit">شارژ کیف پول</button>
+    </form>
 </div>
 {% endblock %}

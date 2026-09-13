@@ -99,10 +99,10 @@ class SubscriptionsAndAccessControlTests(APITestCase):
         response = self.client.get(self.download_url)
         
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertIn("اشتراک", str(response.data.get('detail', '')))
+        self.assertIn("خرید", str(response.data.get('detail', '')))
 
-    def test_05_download_file_permission_granted_with_active_subscription(self):
-        """کاربر با اشتراک فعال باید فایل باینری را با موفقیت دانلود کند"""
+    def test_05_download_file_permission_denied_with_active_subscription(self):
+        """Active subscriptions no longer unlock paid files."""
         UserSubscription.objects.create(
             user=self.user,
             plan=self.plan,
@@ -114,7 +114,4 @@ class SubscriptionsAndAccessControlTests(APITestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.get(self.download_url)
         
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        # بررسی دریافت محتوای استریم شده به جای داده جیسون
-        content = b"".join(response.streaming_content)
-        self.assertEqual(content, b"%PDF-1.4 sample dummy content for testing")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

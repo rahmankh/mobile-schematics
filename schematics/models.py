@@ -144,13 +144,13 @@ class SchematicCategory(models.Model):
 
 class Schematic(models.Model):
     """
-    A sellable / subscription-gated repair document for one phone model.
+    A sellable repair document for one phone model.
 
     Access matrix (see `user_can_download`):
     - `is_free=True`              → any authenticated user
     - staff / superuser           → always
     - matching SchematicPurchase  → single-copy buyer
-    - `requires_subscription=True` + active UserSubscription → subscriber
+    Subscriptions no longer unlock downloads; pay with a single purchase or wallet.
     """
 
     phone_model = models.ForeignKey(
@@ -225,9 +225,8 @@ class Schematic(models.Model):
         Anonymous users always get False; the download view additionally requires
         IsAuthenticated so JWT/session must be present before this matrix runs.
 
-        Paid rows with `requires_subscription=False` are single-purchase-only
-        (plus staff). That lets the catalog sell premium documents outside the
-        subscription bundle.
+        Paid documents require a SchematicPurchase (gateway or wallet). Active
+        subscriptions are ignored.
         """
         if user is None or not getattr(user, 'is_authenticated', False):
             return False
@@ -238,17 +237,7 @@ class Schematic(models.Model):
         if user.is_staff or user.is_superuser:
             return True
 
-        # Single-copy entitlement (Phase 3 commerce writes these rows).
-        if self.purchases.filter(user=user).exists():
-            return True
-
-        if self.requires_subscription:
-            # Late import avoids a circular import with subscriptions.models.
-            from subscriptions.models import UserSubscription
-
-            return UserSubscription.objects.has_active_subscription(user)
-
-        return False
+        return self.purchases.filter(user=user).exists()
 
 
 class SchematicFile(models.Model):

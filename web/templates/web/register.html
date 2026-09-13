@@ -1,11 +1,11 @@
 {% extends "web/base.html" %}
 
-{% block title %}ثبت‌نام تکنسین{% endblock %}
+{% block title %}ثبت‌نام{% endblock %}
 
 {% block content %}
 <div class="login-card">
-    <h1>ایجاد حساب تکنسین</h1>
-    <p class="lede">با شماره موبایل ثبت‌نام کنید. حساب شما تکنسین است و دسترسی ادمین ندارد.</p>
+    <h1>ایجاد حساب</h1>
+    <p class="lede">با شماره موبایل ثبت‌نام کنید. حساب شما دسترسی ادمین ندارد.</p>
     <form method="post" action="{% url 'web:register' %}">
         {% csrf_token %}
         {{ form.non_field_errors }}

@@ -20,7 +20,8 @@ class PaymentTransaction(models.Model):
 
     class Purpose(models.TextChoices):
         SCHEMATIC = 'schematic', _('خرید تکی شماتیک')
-        SUBSCRIPTION = 'subscription', _('خرید اشتراک')
+        WALLET = 'wallet', _('شارژ کیف پول')
+        SUBSCRIPTION = 'subscription', _('خرید اشتراک')  # legacy rows only; new checkouts are rejected.
 
     class Status(models.TextChoices):
         PENDING = 'pending', _('در انتظار پرداخت')

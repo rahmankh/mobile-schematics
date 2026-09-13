@@ -11,10 +11,7 @@
             {% if item.is_free %}
             <span class="pill free">رایگان</span>
             {% else %}
-                {% if item.requires_subscription %}
-                <span class="pill gated">اشتراکی</span>
-                {% endif %}
-                <span class="pill paid">{% if item.price %}{{ item.price }} تومان{% else %}خرید تکی{% endif %}</span>
+            <span class="pill paid">{% if item.price %}خرید تکی {{ item.price }} تومان{% else %}خرید تکی{% endif %}</span>
             {% endif %}
         </div>
         <div class="card-stats">
