@@ -54,6 +54,12 @@ class PaymentTransaction(models.Model):
         related_name='payment_transactions',
         verbose_name=_('شماتیک'),
     )
+    schematic_ids = models.JSONField(
+        _('شناسه شماتیک‌های سبد'),
+        default=list,
+        blank=True,
+        help_text=_('Snapshot of schematic pks charged in this checkout (batch or single).'),
+    )
     plan = models.ForeignKey(
         'subscriptions.Plan',
         on_delete=models.SET_NULL,
@@ -80,6 +86,22 @@ class PaymentTransaction(models.Model):
         indexes = [
             models.Index(fields=['user', 'status'], name='idx_pay_user_status'),
         ]
+
+    def purchased_schematic_ids(self) -> list[int]:
+        """Ordered unique schematic pks this transaction is meant to fulfill."""
+        ids: list[int] = []
+        seen: set[int] = set()
+        for raw in list(self.schematic_ids or []):
+            try:
+                pk = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if pk not in seen:
+                seen.add(pk)
+                ids.append(pk)
+        if self.schematic_id and self.schematic_id not in seen:
+            ids.insert(0, self.schematic_id)
+        return ids
 
     def __str__(self) -> str:
         return f'{self.authority} ({self.get_status_display()})'

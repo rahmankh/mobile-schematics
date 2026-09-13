@@ -315,6 +315,87 @@ class TestCatalogPages:
 
 
 @pytest.mark.django_db
+class TestCartBatchCheckout:
+    def test_add_two_items_then_batch_checkout_grants_both_viewers(self, client):
+        user = UserFactory()
+        first = SchematicFactory(is_free=False, price=80000, title='Cart Board A')
+        second = SchematicFactory(is_free=False, price=70000, title='Cart Board B')
+        SchematicFileFactory(schematic=first, file_title='A PDF')
+        SchematicFileFactory(schematic=second, file_title='B PDF')
+        client.force_login(user)
+
+        add_first = client.post(
+            reverse('web:cart-add', kwargs={'pk': first.pk}),
+            {'next': reverse('web:schematic-detail', kwargs={'pk': first.pk})},
+        )
+        assert add_first.status_code == 302
+        client.post(reverse('web:cart-add', kwargs={'pk': second.pk}))
+        client.post(reverse('web:cart-add', kwargs={'pk': first.pk}))
+
+        cart = client.get(reverse('web:cart'))
+        html = cart.content.decode('utf-8')
+        assert cart.status_code == 200
+        assert 'Cart Board A' in html
+        assert 'Cart Board B' in html
+        assert '150000' in html
+        assert 'پرداخت یکجای سبد' in html
+        assert '>2</span>' in html or 'cart-count' in html
+
+        start = client.post(reverse('web:cart-checkout'))
+        assert start.status_code == 302
+        location = start['Location']
+        assert 'Authority=S.' in location
+        assert 'zarinpal.com' not in location
+
+        verify = client.get(location)
+        assert verify.status_code == 200
+        payload = verify.json()
+        assert payload['paid'] is True
+        assert sorted(payload['schematic_ids']) == sorted([first.pk, second.pk])
+        assert SchematicPurchase.objects.filter(user=user).count() == 2
+
+        first_page = client.get(
+            reverse('web:schematic-detail', kwargs={'pk': first.pk})
+        ).content.decode('utf-8')
+        second_page = client.get(
+            reverse('web:schematic-detail', kwargs={'pk': second.pk})
+        ).content.decode('utf-8')
+        assert 'schematic-viewer' in first_page
+        assert 'schematic-viewer' in second_page
+        assert reverse(
+            'schematics:schematic-file-view', kwargs={'pk': first.files.first().pk}
+        ) in first_page
+        assert reverse(
+            'schematics:schematic-file-download', kwargs={'pk': first.files.first().pk}
+        ) not in first_page
+
+        emptied = client.get(reverse('web:cart')).content.decode('utf-8')
+        assert 'سبد خرید خالی است' in emptied
+
+    def test_cart_add_rejects_free_schematic(self, client):
+        user = UserFactory()
+        schematic = SchematicFactory(is_free=True, price=0, title='Open Board')
+        client.force_login(user)
+
+        response = client.post(reverse('web:cart-add', kwargs={'pk': schematic.pk}))
+        assert response.status_code == 302
+        cart = client.get(reverse('web:cart')).content.decode('utf-8')
+        assert 'سبد خرید خالی است' in cart
+
+    def test_guest_can_fill_cart_but_checkout_requires_login(self, client):
+        schematic = SchematicFactory(is_free=False, price=110000, title='Guest Cart Board')
+        added = client.post(reverse('web:cart-add', kwargs={'pk': schematic.pk}))
+        assert added.status_code == 302
+        html = client.get(reverse('web:cart')).content.decode('utf-8')
+        assert 'Guest Cart Board' in html
+        assert 'برای پرداخت وارد شوید' in html
+
+        checkout = client.post(reverse('web:cart-checkout'))
+        assert checkout.status_code == 302
+        assert reverse('web:login') in checkout.url
+
+
+@pytest.mark.django_db
 class TestPasswordResetPages:
     def test_request_page_is_reachable(self, client):
         html = client.get(reverse('web:password-reset')).content.decode('utf-8')

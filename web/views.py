@@ -18,7 +18,9 @@ from django.views.generic import DetailView, FormView, TemplateView
 
 from accounts.password_reset import CONFIRM_SUCCESS_MESSAGE, GENERIC_REQUEST_MESSAGE
 from payments.services import PaymentConflict, PaymentError, create_payment_request, pay_schematic_from_wallet
-from schematics.models import Brand, PhoneModel, Schematic, SchematicCategory
+from schematics.models import Brand, PhoneModel, Schematic, SchematicCategory, SchematicPurchase
+
+from .cart import add_to_cart, clear_cart, get_cart_ids, remove_from_cart
 
 from .forms import (
     PasswordResetConfirmForm,
@@ -297,6 +299,101 @@ class SchematicCheckoutView(LoginRequiredMixin, View):
         except PaymentError as exc:
             messages.error(request, str(exc))
             return redirect('web:schematic-detail', pk=pk)
+        return redirect(payment_url)
+
+
+class CartAddView(View):
+    """Append a schematic to the session cart without starting payment."""
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        schematic = get_object_or_404(Schematic, pk=pk)
+        next_url = request.POST.get('next') or reverse('web:cart')
+        if schematic.is_free or schematic.price <= 0:
+            messages.error(request, 'این شماتیک برای خرید تکی در دسترس نیست.')
+            return redirect(next_url)
+        if (
+            request.user.is_authenticated
+            and SchematicPurchase.objects.filter(user=request.user, schematic=schematic).exists()
+        ):
+            messages.error(request, 'این شماتیک را قبلاً خریداری کرده‌اید.')
+            return redirect(next_url)
+        add_to_cart(request, schematic.pk)
+        messages.success(request, 'به سبد خرید اضافه شد.')
+        return redirect(next_url)
+
+
+class CartRemoveView(View):
+    """Drop one schematic from the session cart."""
+
+    http_method_names = ['post']
+
+    def post(self, request, pk):
+        remove_from_cart(request, pk)
+        messages.success(request, 'از سبد خرید حذف شد.')
+        next_url = request.POST.get('next') or reverse('web:cart')
+        return redirect(next_url)
+
+
+class CartPageView(TemplateView):
+    """Session cart: line items, aggregate total, and batch checkout."""
+
+    template_name = 'web/cart.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        ids = get_cart_ids(self.request)
+        items = list(
+            Schematic.objects.filter(pk__in=ids)
+            .select_related('phone_model__brand', 'category')
+        )
+        by_id = {item.pk: item for item in items}
+        ordered = [by_id[pk] for pk in ids if pk in by_id]
+        owned_ids: set[int] = set()
+        if self.request.user.is_authenticated and ordered:
+            owned_ids = set(
+                SchematicPurchase.objects.filter(
+                    user=self.request.user,
+                    schematic_id__in=[item.pk for item in ordered],
+                ).values_list('schematic_id', flat=True)
+            )
+        payable = [
+            item
+            for item in ordered
+            if not item.is_free and item.price > 0 and item.pk not in owned_ids
+        ]
+        context['cart_items'] = ordered
+        context['cart_owned_ids'] = owned_ids
+        context['cart_payable'] = payable
+        context['cart_total'] = sum((item.price for item in payable), 0)
+        return context
+
+
+class CartCheckoutView(LoginRequiredMixin, View):
+    """Start one gateway session for every payable schematic in the cart."""
+
+    http_method_names = ['post']
+
+    def post(self, request):
+        ids = get_cart_ids(request)
+        if not ids:
+            messages.error(request, 'سبد خرید خالی است.')
+            return redirect('web:cart')
+        try:
+            _txn, payment_url = create_payment_request(
+                user=request.user,
+                purpose='schematic',
+                schematic_ids=ids,
+                request=request,
+            )
+        except PaymentConflict as exc:
+            messages.error(request, str(exc))
+            return redirect('web:cart')
+        except PaymentError as exc:
+            messages.error(request, str(exc))
+            return redirect('web:cart')
+        clear_cart(request)
         return redirect(payment_url)
 
 

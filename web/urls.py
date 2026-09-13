@@ -4,6 +4,10 @@ from django.urls import path
 
 from .views import (
     BrandDetailView,
+    CartAddView,
+    CartCheckoutView,
+    CartPageView,
+    CartRemoveView,
     HomeView,
     PasswordResetConfirmView,
     PasswordResetRequestView,
@@ -32,6 +36,10 @@ urlpatterns = [
     ),
     path('logout/', TechnicianLogoutView.as_view(), name='logout'),
     path('profile/', ProfilePageView.as_view(), name='profile'),
+    path('cart/', CartPageView.as_view(), name='cart'),
+    path('cart/checkout/', CartCheckoutView.as_view(), name='cart-checkout'),
+    path('cart/<int:pk>/remove/', CartRemoveView.as_view(), name='cart-remove'),
+    path('schematics/<int:pk>/cart/', CartAddView.as_view(), name='cart-add'),
     path('wallet/topup/', WalletTopUpView.as_view(), name='wallet-topup'),
     path(
         'schematics/<int:pk>/checkout/',

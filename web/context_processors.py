@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .cart import cart_count
 from .nav import build_nav_brands, is_auth_page, should_skip_catalog_nav
 
 
@@ -17,4 +18,5 @@ def catalog_nav(request) -> dict:
     return {
         'nav_brands': build_nav_brands(),
         'is_auth_page': is_auth_page(request),
+        'cart_count': cart_count(request),
     }

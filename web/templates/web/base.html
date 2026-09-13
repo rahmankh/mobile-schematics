@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{% static 'web/app.css' %}?v=view-1">
+    <link rel="stylesheet" href="{% static 'web/app.css' %}?v=cart-1">
 </head>
 <body class="drawer">
     <input id="nav-drawer" type="checkbox" class="drawer-toggle" autocomplete="off">
@@ -57,6 +57,12 @@
             {% endif %}
 
             <div class="auth-box">
+                {% if not is_auth_page %}
+                <a class="cart-chip" href="{% url 'web:cart' %}" title="سبد خرید">
+                    سبد
+                    {% if cart_count %}<span class="cart-count">{{ cart_count }}</span>{% endif %}
+                </a>
+                {% endif %}
                 {% if user.is_authenticated %}
                     <a class="profile-chip" href="{% url 'web:profile' %}" title="پروفایل">
                         <span class="avatar">{% firstof user.first_name|slice:":1" "ک" %}</span>

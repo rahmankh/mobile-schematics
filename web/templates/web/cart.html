@@ -1,0 +1,60 @@
+{% extends "web/base.html" %}
+
+{% block title %}سبد خرید{% endblock %}
+
+{% block content %}
+<section class="hero">
+    <h1>سبد خرید</h1>
+    <p class="lede">چند شماتیک را یکجا انتخاب کنید و با یک پرداخت، دسترسی مشاهده همه را بگیرید.</p>
+</section>
+
+{% if cart_items %}
+<div class="cart-list">
+    {% for item in cart_items %}
+    <div class="file-row cart-row">
+        <div>
+            <a href="{% url 'web:schematic-detail' item.pk %}"><strong>{{ item.title }}</strong></a>
+            <div class="meta">
+                {{ item.phone_model.brand.name }} · {{ item.phone_model.name }}
+                {% if item.pk in cart_owned_ids %}
+                · خریداری‌شده
+                {% elif item.is_free or item.price <= 0 %}
+                · غیرقابل خرید
+                {% else %}
+                · {{ item.price }} تومان
+                {% endif %}
+            </div>
+        </div>
+        <form method="post" action="{% url 'web:cart-remove' item.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{% url 'web:cart' %}">
+            <button class="btn btn-ghost" type="submit">حذف</button>
+        </form>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="cart-summary">
+    <div><span>قابل پرداخت</span><strong>{{ cart_payable|length }} مورد</strong></div>
+    <div><span>مبلغ کل</span><strong>{{ cart_total }} تومان</strong></div>
+</div>
+
+{% if user.is_authenticated %}
+    {% if cart_payable %}
+    <form method="post" action="{% url 'web:cart-checkout' %}" class="cart-checkout">
+        {% csrf_token %}
+        <button class="btn btn-primary" type="submit">پرداخت یکجای سبد</button>
+    </form>
+    {% else %}
+    <p class="lede">موردی برای پرداخت در سبد باقی نمانده است.</p>
+    {% endif %}
+{% else %}
+<div class="file-actions">
+    <a class="btn" href="{% url 'web:login' %}?next={% url 'web:cart' %}">برای پرداخت وارد شوید</a>
+    <a class="btn btn-primary" href="{% url 'web:register' %}">ثبت‌نام</a>
+</div>
+{% endif %}
+{% else %}
+<div class="empty">سبد خرید خالی است. شماتیک‌های پولی را از کاتالوگ به سبد اضافه کنید.</div>
+{% endif %}
+{% endblock %}

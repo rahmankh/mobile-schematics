@@ -455,6 +455,64 @@ a.card:hover {
 
 .auth-box form { margin: 0; }
 
+.cart-chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--bg-elev);
+}
+
+.cart-count {
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    display: inline-grid;
+    place-items: center;
+    background: #0284c7;
+    color: #e0f2fe;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.schematic-card-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.card-cart-form { margin: 0; }
+.card-cart-form .btn { width: 100%; }
+
+.cart-list {
+    background: var(--bg-elev);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 8px 18px;
+}
+
+.cart-summary {
+    display: grid;
+    gap: 8px;
+    max-width: 420px;
+    margin: 18px 0;
+}
+
+.cart-summary div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+    padding: 8px 0;
+}
+
+.cart-checkout { margin-top: 8px; }
+
 .breadcrumb {
     color: var(--muted);
     font-size: 13px;

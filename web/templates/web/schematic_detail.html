@@ -58,6 +58,11 @@
             {% csrf_token %}
             <button class="btn btn-primary" type="submit">خرید تکی</button>
         </form>
+        <form method="post" action="{% url 'web:cart-add' schematic.pk %}">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <button class="btn btn-ghost" type="submit">افزودن به سبد</button>
+        </form>
         {% if can_wallet_pay %}
         <form method="post" action="{% url 'web:wallet-pay-schematic' schematic.pk %}">
             {% csrf_token %}

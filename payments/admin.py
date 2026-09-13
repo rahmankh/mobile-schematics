@@ -29,6 +29,7 @@ class PaymentTransactionAdmin(admin.ModelAdmin):
         'created_at',
         'verified_at',
         'gateway',
+        'schematic_ids',
         'claim_token_hash',
         'guest_account_created',
         'claimed_at',

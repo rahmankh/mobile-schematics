@@ -18,19 +18,27 @@ class PaymentRequestSerializer(serializers.Serializer):
     """
     Cart payload.
 
-    `purpose=schematic` needs schematic_id. `purpose=wallet` needs amount.
-    Subscription checkouts are retired.
+    `purpose=schematic` needs schematic_id and/or schematic_ids.
+    `purpose=wallet` needs amount. Subscription checkouts are retired.
     """
 
     purpose = serializers.ChoiceField(choices=CHECKOUT_PURPOSES)
     schematic_id = serializers.IntegerField(required=False)
+    schematic_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        allow_empty=False,
+    )
     plan_id = serializers.IntegerField(required=False)
     amount = serializers.IntegerField(required=False, min_value=1)
 
     def validate(self, attrs):
         purpose = attrs['purpose']
-        if purpose == PaymentTransaction.Purpose.SCHEMATIC and not attrs.get('schematic_id'):
-            raise serializers.ValidationError({'schematic_id': 'برای خرید تکی شماتیک لازم است.'})
+        if purpose == PaymentTransaction.Purpose.SCHEMATIC:
+            if not attrs.get('schematic_id') and not attrs.get('schematic_ids'):
+                raise serializers.ValidationError(
+                    {'schematic_ids': 'برای خرید شماتیک حداقل یک شناسه لازم است.'}
+                )
         if purpose == PaymentTransaction.Purpose.WALLET and not attrs.get('amount'):
             raise serializers.ValidationError({'amount': 'برای شارژ کیف پول مبلغ لازم است.'})
         if purpose == PaymentTransaction.Purpose.SUBSCRIPTION:
@@ -41,6 +49,8 @@ class PaymentRequestSerializer(serializers.Serializer):
 class PaymentTransactionSerializer(serializers.ModelSerializer):
     """Public status of a payment session (never exposes gateway secrets)."""
 
+    schematic_ids = serializers.SerializerMethodField()
+
     class Meta:
         model = PaymentTransaction
         fields = [
@@ -50,12 +60,16 @@ class PaymentTransactionSerializer(serializers.ModelSerializer):
             'authority',
             'status',
             'schematic',
+            'schematic_ids',
             'plan',
             'ref_id',
             'created_at',
             'verified_at',
         ]
         read_only_fields = fields
+
+    def get_schematic_ids(self, obj) -> list[int]:
+        return obj.purchased_schematic_ids()
 
 
 class GuestCheckoutSerializer(serializers.Serializer):

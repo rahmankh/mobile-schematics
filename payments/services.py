@@ -9,6 +9,8 @@ pending → paid after a successful verify().
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
@@ -40,11 +42,79 @@ class PaymentClaimDenied(PaymentError):
     """Mapped to HTTP 403 (wrong/unusable guest claim)."""
 
 
+def _unique_schematic_ids(*groups) -> list[int]:
+    """Flatten schematic id arguments, drop junk, and keep first-seen order."""
+    ids: list[int] = []
+    seen: set[int] = set()
+    for group in groups:
+        if group is None:
+            continue
+        if isinstance(group, (str, bytes)):
+            group = [group]
+        elif isinstance(group, int):
+            group = [group]
+        else:
+            try:
+                group = list(group)
+            except TypeError:
+                group = [group]
+        for raw in group:
+            try:
+                pk = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if pk not in seen:
+                seen.add(pk)
+                ids.append(pk)
+    return ids
+
+
+def resolve_payable_schematics(user, *, schematic_id=None, schematic_ids=None) -> list[Schematic]:
+    """
+    Build the charged schematic list for a checkout.
+
+    Duplicates, missing rows, free/unpriced documents, and already-owned
+    copies are skipped. An empty result raises PaymentError / PaymentConflict
+    with the same messages single-item checkout used.
+    """
+    ids = _unique_schematic_ids(schematic_ids, schematic_id)
+    if not ids:
+        raise PaymentError('schematic_id الزامی است.')
+
+    found = {item.pk: item for item in Schematic.objects.filter(pk__in=ids)}
+    payable: list[Schematic] = []
+    already_owned = 0
+    unpayable = 0
+    for pk in ids:
+        schematic = found.get(pk)
+        if schematic is None:
+            unpayable += 1
+            continue
+        try:
+            assert_schematic_purchasable(user, schematic)
+        except AlreadyPurchased:
+            already_owned += 1
+            continue
+        except SchematicNotPurchasable:
+            unpayable += 1
+            continue
+        payable.append(schematic)
+
+    if payable:
+        return payable
+    if not found:
+        raise PaymentError('شماتیک مورد نظر یافت نشد.')
+    if already_owned and unpayable == 0:
+        raise PaymentConflict('این شماتیک را قبلاً خریداری کرده‌اید.')
+    raise PaymentError('این شماتیک برای خرید تکی در دسترس نیست.')
+
+
 def create_payment_request(
     *,
     user,
     purpose: str,
     schematic_id=None,
+    schematic_ids=None,
     plan_id=None,
     amount=None,
     request=None,
@@ -59,22 +129,21 @@ def create_payment_request(
     if purpose == PaymentTransaction.Purpose.SUBSCRIPTION:
         raise PaymentError(SUBSCRIPTION_RETIRED_MESSAGE)
 
+    batch_ids: list[int] = []
     if purpose == PaymentTransaction.Purpose.SCHEMATIC:
-        if not schematic_id:
-            raise PaymentError('schematic_id الزامی است.')
-        try:
-            schematic = Schematic.objects.get(pk=schematic_id)
-        except Schematic.DoesNotExist as exc:
-            raise PaymentError('شماتیک مورد نظر یافت نشد.') from exc
-        try:
-            assert_schematic_purchasable(user, schematic)
-        except AlreadyPurchased as exc:
-            raise PaymentConflict(str(exc)) from exc
-        except SchematicNotPurchasable as exc:
-            raise PaymentError(str(exc)) from exc
-        amount = schematic.price
+        payable = resolve_payable_schematics(
+            user,
+            schematic_id=schematic_id,
+            schematic_ids=schematic_ids,
+        )
+        schematic = payable[0]
+        batch_ids = [item.pk for item in payable]
+        amount = sum((item.price for item in payable), Decimal('0'))
         plan = None
-        description = f'Schematic #{schematic.pk} {schematic.title}'[:255]
+        if len(payable) == 1:
+            description = f'Schematic #{schematic.pk} {schematic.title}'[:255]
+        else:
+            description = f'Batch schematics {", ".join(str(pk) for pk in batch_ids)}'[:255]
     elif purpose == PaymentTransaction.Purpose.WALLET:
         schematic = None
         plan = None
@@ -108,6 +177,7 @@ def create_payment_request(
         gateway=gateway.name,
         status=PaymentTransaction.Status.PENDING,
         schematic=schematic,
+        schematic_ids=batch_ids,
         plan=plan,
         description=description,
         claim_token_hash=claim_token_hash,
@@ -257,8 +327,23 @@ def verify_and_fulfill(*, authority: str, gateway_ok: bool) -> PaymentTransactio
 
 def _grant_entitlement(txn: PaymentTransaction) -> None:
     """Insert commerce rows. Called only from verify_and_fulfill inside an atomic block."""
-    if txn.purpose == PaymentTransaction.Purpose.SCHEMATIC and txn.schematic_id:
-        fulfill_schematic_purchase(txn.user, txn.schematic, price_paid=txn.amount)
+    if txn.purpose == PaymentTransaction.Purpose.SCHEMATIC:
+        ids = txn.purchased_schematic_ids()
+        if not ids:
+            raise PaymentError('تراکنش هدف مشخصی برای فعال‌سازی ندارد.')
+        found = {
+            item.pk: item
+            for item in Schematic.objects.filter(pk__in=ids)
+        }
+        granted = 0
+        for pk in ids:
+            schematic = found.get(pk)
+            if schematic is None:
+                continue
+            fulfill_schematic_purchase(txn.user, schematic, price_paid=schematic.price)
+            granted += 1
+        if granted == 0:
+            raise PaymentError('تراکنش هدف مشخصی برای فعال‌سازی ندارد.')
     elif txn.purpose == PaymentTransaction.Purpose.WALLET:
         credit_wallet(txn.user, txn.amount)
     elif txn.purpose == PaymentTransaction.Purpose.SUBSCRIPTION:

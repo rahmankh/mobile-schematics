@@ -1,3 +1,4 @@
+<div class="schematic-card-wrap">
 <a class="card schematic-card" href="{% url 'web:schematic-detail' item.pk %}">
     <div>
         <h3>{{ item.title }}</h3>
@@ -24,3 +25,11 @@
         </div>
     </div>
 </a>
+{% if not item.is_free and item.price > 0 %}
+<form method="post" action="{% url 'web:cart-add' item.pk %}" class="card-cart-form">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button class="btn btn-ghost" type="submit">افزودن به سبد</button>
+</form>
+{% endif %}
+</div>
